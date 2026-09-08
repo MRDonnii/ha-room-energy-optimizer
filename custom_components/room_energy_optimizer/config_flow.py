@@ -69,6 +69,7 @@ def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
 
 def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True) -> vol.Schema:
     defaults = defaults or {}
+
     def required(key: str, fallback=vol.UNDEFINED):
         value = defaults.get(key, fallback)
         return vol.Required(key) if value is vol.UNDEFINED else vol.Required(key, default=value)
@@ -118,9 +119,13 @@ def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True)
                     domain=["binary_sensor", "climate"], multiple=True
                 )
             ),
-            vol.Optional(
-                "stove_temperature_entity",
-                default=defaults.get("stove_temperature_entity", ""),
+            (
+                vol.Optional(
+                    "stove_temperature_entity",
+                    default=defaults["stove_temperature_entity"],
+                )
+                if defaults.get("stove_temperature_entity")
+                else vol.Optional("stove_temperature_entity")
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
             ),

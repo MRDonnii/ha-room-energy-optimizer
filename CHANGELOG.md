@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.3
+
+- Fixed the optional stove entity selector so rooms without a stove can be
+  edited and saved through Home Assistant's options flow.
+
 ## 1.5.2
 
 - Save immediately after editing one room. This makes each edit atomic and

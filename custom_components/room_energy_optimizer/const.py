@@ -2,7 +2,7 @@
 
 DOMAIN = "room_energy_optimizer"
 PLATFORMS = ["sensor", "binary_sensor"]
-VERSION = "1.5.2"
+VERSION = "1.5.3"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"
