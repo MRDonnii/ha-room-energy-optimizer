@@ -1,0 +1,11 @@
+{
+  "domain": "room_energy_optimizer",
+  "name": "Room Energy Optimizer",
+  "codeowners": ["@MRDonnii"],
+  "config_flow": true,
+  "documentation": "https://github.com/MRDonnii/ha-room-energy-optimizer",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}

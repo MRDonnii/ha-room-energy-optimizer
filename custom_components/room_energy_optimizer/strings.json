@@ -1,0 +1,56 @@
+{
+  "title": "Room Energy Optimizer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure room heating",
+        "description": "Creates read-only energy estimates. It never controls thermostats and does not modify Better Thermostat.",
+        "data": {
+          "name": "Name",
+          "system_type": "Heating system",
+          "flow_temperature_entity": "Flow temperature sensor",
+          "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "rooms": "Rooms"
+        },
+        "data_description": {
+          "rooms": "One room per line: Name|climate.entity|rated radiator watts|area m²"
+        }
+      }
+    },
+    "error": {
+      "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
+      "invalid_sensor": "The optional cost entity must start with sensor."
+    },
+    "abort": {"already_configured": "Room Energy Optimizer is already configured."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit room heating",
+        "description": "Changes reload the integration. Existing monthly counters are retained for unchanged room names.",
+        "data": {
+          "name": "Name",
+          "system_type": "Heating system",
+          "flow_temperature_entity": "Flow temperature sensor",
+          "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "rooms": "Rooms"
+        },
+        "data_description": {
+          "rooms": "One room per line: Name|climate.entity|rated radiator watts|area m²"
+        }
+      }
+    },
+    "error": {
+      "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
+      "invalid_sensor": "The optional cost entity must start with sensor."
+    }
+  },
+  "selector": {
+    "system_type": {
+      "options": {
+        "one_pipe": "One-pipe system",
+        "two_pipe": "Two-pipe system"
+      }
+    }
+  }
+}

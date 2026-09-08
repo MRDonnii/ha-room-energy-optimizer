@@ -1,0 +1,56 @@
+{
+  "title": "Rumenergioptimering",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurer rumopvarmning",
+        "description": "Opretter skrivebeskyttede energi-estimater. Integrationen styrer aldrig termostater og ændrer ikke Better Thermostat.",
+        "data": {
+          "name": "Navn",
+          "system_type": "Varmeanlæg",
+          "flow_temperature_entity": "Fremløbstemperatur-sensor",
+          "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
+          "rooms": "Rum"
+        },
+        "data_description": {
+          "rooms": "Ét rum pr. linje: Navn|climate.entity|radiatorens nominelle watt|areal i m²"
+        }
+      }
+    },
+    "error": {
+      "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
+      "invalid_sensor": "Den valgfrie prisentitet skal begynde med sensor."
+    },
+    "abort": {"already_configured": "Rumenergioptimering er allerede konfigureret."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rediger rumopvarmning",
+        "description": "Ændringer genindlæser integrationen. Månedstællere bevares for uændrede rumnavne.",
+        "data": {
+          "name": "Navn",
+          "system_type": "Varmeanlæg",
+          "flow_temperature_entity": "Fremløbstemperatur-sensor",
+          "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
+          "rooms": "Rum"
+        },
+        "data_description": {
+          "rooms": "Ét rum pr. linje: Navn|climate.entity|radiatorens nominelle watt|areal i m²"
+        }
+      }
+    },
+    "error": {
+      "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
+      "invalid_sensor": "Den valgfrie prisentitet skal begynde med sensor."
+    }
+  },
+  "selector": {
+    "system_type": {
+      "options": {
+        "one_pipe": "Et-strengsanlæg",
+        "two_pipe": "To-strengsanlæg"
+      }
+    }
+  }
+}
