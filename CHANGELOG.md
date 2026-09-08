@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 — 2026-09-08
+
+- Added HACS-required repository metadata, issue tracker and brand asset layout.
+
 ## 1.0.0 — 2026-09-08
 
 - First HACS-installable release.
