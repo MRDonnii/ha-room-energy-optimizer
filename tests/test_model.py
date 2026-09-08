@@ -19,6 +19,11 @@ def test_parse_rooms_and_danish_slug():
     assert rooms[0].area_m2 == 18.5
 
 
+def test_parse_rooms_accepts_migration_seed():
+    rooms = model.parse_rooms("Living room|climate.living_room|2000|30|12,45")
+    assert rooms[0].initial_valve_hours == 12.45
+
+
 def test_parse_rooms_rejects_bad_entity():
     try:
         model.parse_rooms("Kitchen|sensor.temperature|1000|20")

@@ -48,10 +48,18 @@ Bedroom|climate.bedroom|1000|15
 
 The fields are room name, climate entity, rated radiator output in watts and
 room area in square metres. Decimal comma and decimal point are accepted.
+During migration, a fifth field can seed already accumulated valve-hours:
+
+```text
+Living room|climate.living_room|2000|30|12.45
+```
+
+The seed is only used when no saved value exists for the current month.
 
 An optional monthly heating-cost sensor can be selected by entity ID. Its
 value is allocated using monthly valve-hours multiplied by rated radiator
-power, not valve-hours alone.
+power, not valve-hours alone. An optional baseline entity can subtract costs
+that predate installation during the first month.
 
 ## Calculation limits
 

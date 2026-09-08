@@ -10,10 +10,11 @@
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "rooms": "Rum"
         },
         "data_description": {
-          "rooms": "Ét rum pr. linje: Navn|climate.entity|radiatorens nominelle watt|areal i m²"
+          "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
         }
       }
     },
@@ -33,10 +34,11 @@
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "rooms": "Rum"
         },
         "data_description": {
-          "rooms": "Ét rum pr. linje: Navn|climate.entity|radiatorens nominelle watt|areal i m²"
+          "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
         }
       }
     },

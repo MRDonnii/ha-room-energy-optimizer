@@ -18,7 +18,7 @@ class OptimizerEntity(Entity):
             name=runtime.entry.title,
             manufacturer="Room Energy Optimizer",
             model="Local hydronic estimator",
-            sw_version="1.0.1",
+            sw_version="1.1.0",
         )
 
     async def async_added_to_hass(self) -> None:

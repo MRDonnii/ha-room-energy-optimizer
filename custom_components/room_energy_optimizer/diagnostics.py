@@ -6,7 +6,7 @@ from .const import DOMAIN
 async def async_get_config_entry_diagnostics(hass, entry):
     runtime = hass.data[DOMAIN][entry.entry_id]
     return {
-        "version": "1.0.1",
+        "version": "1.1.0",
         "system_type": entry.options.get("system_type"),
         "room_count": len(runtime.rooms),
         "rooms": [

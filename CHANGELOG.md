@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0 — 2026-09-08
+
+- Added optional migration seeds for existing month-to-date valve-hours.
+- Added an optional monthly-cost baseline entity for mid-month migration.
+
 ## 1.0.1 — 2026-09-08
 
 - Added HACS-required repository metadata, issue tracker and brand asset layout.

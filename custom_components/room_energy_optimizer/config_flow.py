@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_FLOW_TEMPERATURE,
     CONF_MONTHLY_COST,
+    CONF_MONTHLY_COST_BASELINE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
     DOMAIN,
@@ -38,6 +39,10 @@ def _schema(defaults: dict[str, Any]) -> vol.Schema:
                 CONF_FLOW_TEMPERATURE, default=defaults.get(CONF_FLOW_TEMPERATURE)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
             vol.Optional(CONF_MONTHLY_COST, default=defaults.get(CONF_MONTHLY_COST, "")): str,
+            vol.Optional(
+                CONF_MONTHLY_COST_BASELINE,
+                default=defaults.get(CONF_MONTHLY_COST_BASELINE, ""),
+            ): str,
             vol.Required(
                 CONF_ROOMS,
                 default=defaults.get(
@@ -57,9 +62,10 @@ def _validate(user_input: dict[str, Any]) -> dict[str, str]:
         parse_rooms(user_input.get(CONF_ROOMS, ""))
     except ValueError:
         errors[CONF_ROOMS] = "invalid_rooms"
-    monthly = user_input.get(CONF_MONTHLY_COST, "").strip()
-    if monthly and not monthly.startswith("sensor."):
-        errors[CONF_MONTHLY_COST] = "invalid_sensor"
+    for key in (CONF_MONTHLY_COST, CONF_MONTHLY_COST_BASELINE):
+        entity_id = user_input.get(key, "").strip()
+        if entity_id and not entity_id.startswith(("sensor.", "input_number.")):
+            errors[key] = "invalid_sensor"
     return errors
 
 

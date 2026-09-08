@@ -10,10 +10,11 @@
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "rooms": "Rooms"
         },
         "data_description": {
-          "rooms": "One room per line: Name|climate.entity|rated radiator watts|area m²"
+          "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
         }
       }
     },
@@ -33,10 +34,11 @@
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "rooms": "Rooms"
         },
         "data_description": {
-          "rooms": "One room per line: Name|climate.entity|rated radiator watts|area m²"
+          "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
         }
       }
     },

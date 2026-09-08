@@ -19,6 +19,7 @@ class RoomConfig:
     climate_entity: str
     rated_power_w: float
     area_m2: float
+    initial_valve_hours: float = 0.0
 
 
 def slugify(value: str) -> str:
@@ -37,9 +38,9 @@ def parse_rooms(raw: str) -> list[RoomConfig]:
         if not line or line.startswith("#"):
             continue
         parts = [part.strip() for part in line.split("|")]
-        if len(parts) != 4:
-            raise ValueError(f"line {number}: expected 4 fields")
-        name, climate_entity, rated_text, area_text = parts
+        if len(parts) not in (4, 5):
+            raise ValueError(f"line {number}: expected 4 or 5 fields")
+        name, climate_entity, rated_text, area_text = parts[:4]
         slug = slugify(name)
         if not name or not slug:
             raise ValueError(f"line {number}: invalid room name")
@@ -48,14 +49,15 @@ def parse_rooms(raw: str) -> list[RoomConfig]:
         try:
             rated = float(rated_text.replace(",", "."))
             area = float(area_text.replace(",", "."))
+            initial_hours = float(parts[4].replace(",", ".")) if len(parts) == 5 else 0.0
         except ValueError as err:
             raise ValueError(f"line {number}: power and area must be numbers") from err
-        if rated <= 0 or area <= 0:
-            raise ValueError(f"line {number}: power and area must be above zero")
+        if rated <= 0 or area <= 0 or initial_hours < 0:
+            raise ValueError(f"line {number}: power and area must be positive")
         if slug in seen:
             raise ValueError(f"line {number}: duplicate room name")
         seen.add(slug)
-        rooms.append(RoomConfig(name, slug, climate_entity, rated, area))
+        rooms.append(RoomConfig(name, slug, climate_entity, rated, area, initial_hours))
     if not rooms:
         raise ValueError("at least one room is required")
     return rooms

@@ -8,6 +8,7 @@ from homeassistant.const import UnitOfArea, UnitOfPower
 from .const import (
     CONF_FLOW_TEMPERATURE,
     CONF_MONTHLY_COST,
+    CONF_MONTHLY_COST_BASELINE,
     CONF_SYSTEM_TYPE,
     DOMAIN,
     SYSTEM_ONE_PIPE,
@@ -123,7 +124,14 @@ class RoomSensor(OptimizerEntity, SensorEntity):
                 total_cost = max(0.0, float(state.state))
             except (AttributeError, TypeError, ValueError):
                 return 0
-            return round(total_cost * weighted / total_weighted, 2) if total_weighted > 0 else 0
+            baseline_id = self.runtime.entry.options.get(CONF_MONTHLY_COST_BASELINE, "")
+            baseline_state = self.hass.states.get(baseline_id) if baseline_id else None
+            try:
+                baseline = max(0.0, float(baseline_state.state))
+            except (AttributeError, TypeError, ValueError):
+                baseline = 0.0
+            distributable = max(0.0, total_cost - baseline)
+            return round(distributable * weighted / total_weighted, 2) if total_weighted > 0 else 0
         return self.room.area_m2
 
 

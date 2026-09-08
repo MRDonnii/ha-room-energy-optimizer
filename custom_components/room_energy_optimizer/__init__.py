@@ -23,7 +23,7 @@ class RuntimeData:
         self.entry = entry
         self.rooms: list[RoomConfig] = parse_rooms(entry.options.get(CONF_ROOMS, ""))
         self.valves: dict[str, float | None] = {room.slug: None for room in self.rooms}
-        self.hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
+        self.hours: dict[str, float] = {room.slug: room.initial_valve_hours for room in self.rooms}
         self.listeners: list[Any] = []
         self._last_sample: datetime | None = None
         self._month = dt_util.now().strftime("%Y-%m")
