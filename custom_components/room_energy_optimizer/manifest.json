@@ -8,5 +8,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/MRDonnii/ha-room-energy-optimizer/issues",
   "requirements": [],
-  "version": "1.1.1"
+  "version": "1.2.0"
 }

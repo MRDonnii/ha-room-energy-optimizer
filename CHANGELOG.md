@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Added a rated radiator output sensor for every room.
+- Added a learned heat-loss sensor sourced read-only from Better Thermostat.
+- Added a radiator-stressed binary sensor when the valve is at least 99% open
+  and the room remains more than 0.3 °C below target.
+- These additions complete migration of the room-energy dashboard away from
+  YAML template sensors. Better Thermostat control and learning are unchanged.
+
 ## 1.1.1 — 2026-09-08
 
 - Accept Better Thermostat `calibration_balance` as either JSON text or an object.

@@ -50,6 +50,22 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                 RoomSensor(
                     runtime, room, "area", "Room area", UnitOfArea.SQUARE_METERS, "mdi:set-square"
                 ),
+                RoomSensor(
+                    runtime,
+                    room,
+                    "rated_power",
+                    "Rated radiator output",
+                    UnitOfPower.WATT,
+                    "mdi:radiator",
+                ),
+                RoomSensor(
+                    runtime,
+                    room,
+                    "heat_loss",
+                    "Learned heat loss",
+                    "°C/min",
+                    "mdi:home-thermometer-outline",
+                ),
             ]
         )
     entities.append(TotalPowerSensor(runtime))
@@ -64,13 +80,15 @@ class RoomSensor(OptimizerEntity, SensorEntity):
         self._attr_name = f"{room.name} {name}"
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
-        if kind in ("valve", "power", "capacity", "share"):
+        if kind in ("valve", "power", "capacity", "share", "heat_loss"):
             self._attr_state_class = SensorStateClass.MEASUREMENT
         elif kind == "hours":
             self._attr_state_class = SensorStateClass.TOTAL
         elif kind == "cost":
             self._attr_device_class = SensorDeviceClass.MONETARY
             self._attr_state_class = SensorStateClass.TOTAL
+        elif kind == "rated_power":
+            self._attr_device_class = SensorDeviceClass.POWER
 
     def _power(self):
         climate = self.hass.states.get(self.room.climate_entity)
@@ -132,6 +150,14 @@ class RoomSensor(OptimizerEntity, SensorEntity):
                 baseline = 0.0
             distributable = max(0.0, total_cost - baseline)
             return round(distributable * weighted / total_weighted, 2) if total_weighted > 0 else 0
+        if self.kind == "rated_power":
+            return self.room.rated_power_w
+        if self.kind == "heat_loss":
+            climate = self.hass.states.get(self.room.climate_entity)
+            try:
+                return round(float(climate.attributes.get("heat_loss", 0)), 4)
+            except (AttributeError, TypeError, ValueError):
+                return 0
         return self.room.area_m2
 
 

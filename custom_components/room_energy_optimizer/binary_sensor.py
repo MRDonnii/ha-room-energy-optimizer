@@ -7,7 +7,13 @@ from .entity import OptimizerEntity
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
-    async_add_entities([DataHealthSensor(hass.data[DOMAIN][entry.entry_id])])
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities(
+        [
+            DataHealthSensor(runtime),
+            *(RadiatorStressedSensor(runtime, room) for room in runtime.rooms),
+        ]
+    )
 
 
 class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
@@ -35,3 +41,31 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
                 if self.runtime.valves[room.slug] is None
             ]
         }
+
+
+class RadiatorStressedSensor(OptimizerEntity, BinarySensorEntity):
+    """Report a fully open radiator that is still behind its target."""
+
+    _attr_name = None
+    _attr_icon = "mdi:radiator-off"
+
+    def __init__(self, runtime, room) -> None:
+        super().__init__(runtime, f"{room.slug}_radiator_stressed")
+        self.room = room
+        self._attr_name = f"{room.name} Radiator stressed"
+
+    @property
+    def available(self) -> bool:
+        climate = self.hass.states.get(self.room.climate_entity)
+        return self.runtime.valves[self.room.slug] is not None and climate is not None
+
+    @property
+    def is_on(self) -> bool:
+        climate = self.hass.states.get(self.room.climate_entity)
+        valve = self.runtime.valves[self.room.slug]
+        try:
+            target = float(climate.attributes["temperature"])
+            current = float(climate.attributes["current_temperature"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return False
+        return valve is not None and valve >= 99 and target - current > 0.3
