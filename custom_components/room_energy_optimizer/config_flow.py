@@ -105,6 +105,32 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="h",
                 )
             ),
+            vol.Optional("external_heat_entities", default=[]): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=["binary_sensor", "climate"], multiple=True
+                )
+            ),
+            vol.Optional("stove_temperature_entity"): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Optional("stove_on_temperature", default=25): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=100,
+                    step=0.1,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="°C",
+                )
+            ),
+            vol.Optional("stove_off_temperature", default=24): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=100,
+                    step=0.1,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="°C",
+                )
+            ),
             vol.Required("add_another_room", default=True): selector.BooleanSelector(),
         }
     )
@@ -191,7 +217,8 @@ class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
         # string here (defensive only - `_async_migrate_room_storage` in
         # __init__.py normally converts it before this flow can be opened).
         self._rooms: list[dict[str, Any]] = [
-            room_to_dict(room) for room in rooms_from_options(config_entry.options.get(CONF_ROOMS, []))
+            room_to_dict(room)
+            for room in rooms_from_options(config_entry.options.get(CONF_ROOMS, []))
         ]
         self._after_rooms_step = "manage_rooms"
 

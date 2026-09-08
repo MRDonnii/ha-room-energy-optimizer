@@ -27,10 +27,16 @@
           "area_m2": "Rumareal",
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
+          "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
+          "stove_on_temperature": "Brændeovn aktiv over",
+          "stove_off_temperature": "Brændeovn inaktiv under",
           "add_another_room": "Tilføj endnu et rum"
         },
         "data_description": {
-          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning."
+          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning.",
+          "external_heat_entities": "Climate-entiteter tæller kun, mens hvac_action er heating. Binære sensorer tæller, mens de er slået til.",
+          "stove_temperature_entity": "Bruger hysterese, så almindelig sensorstøj ikke pauser og genoptager læringen gentagne gange."
         }
       }
     },
@@ -74,10 +80,16 @@
           "area_m2": "Rumareal",
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
+          "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
+          "stove_on_temperature": "Brændeovn aktiv over",
+          "stove_off_temperature": "Brændeovn inaktiv under",
           "add_another_room": "Tilføj endnu et rum"
         },
         "data_description": {
-          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning."
+          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning.",
+          "external_heat_entities": "Climate-entiteter tæller kun, mens hvac_action er heating. Binære sensorer tæller, mens de er slået til.",
+          "stove_temperature_entity": "Bruger hysterese, så almindelig sensorstøj ikke pauser og genoptager læringen gentagne gange."
         }
       },
       "remove_room": {

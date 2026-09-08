@@ -52,6 +52,12 @@ class RuntimeData:
         self.ratio_recent: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.ratio_baseline: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.baseline_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
+        self.external_heat_active: dict[str, bool | None] = {
+            room.slug: None for room in self.rooms
+        }
+        self.external_heat_sources: dict[str, list[str]] = {room.slug: [] for room in self.rooms}
+        self.contact_open: dict[str, bool] = {room.slug: False for room in self.rooms}
+        self._stove_active: dict[str, bool] = {room.slug: False for room in self.rooms}
         self.listeners: list[Any] = []
         self._last_sample: datetime | None = None
         self._month = dt_util.now().strftime("%Y-%m")
@@ -136,6 +142,39 @@ class RuntimeData:
         )
         self.baseline_hours[room.slug] += elapsed_hours
 
+    def _read_external_heat(self, room: RoomConfig) -> tuple[bool | None, list[str]]:
+        """Return external-heat state and the sources currently producing heat."""
+        active_sources: list[str] = []
+        valid = True
+        for entity_id in room.external_heat_entities:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unknown", "unavailable"):
+                valid = False
+                continue
+            active = (
+                state.attributes.get("hvac_action") == "heating"
+                if entity_id.startswith("climate.")
+                else state.state == "on"
+            )
+            if active:
+                active_sources.append(entity_id)
+        if room.stove_temperature_entity:
+            state = self.hass.states.get(room.stove_temperature_entity)
+            try:
+                temperature = float(state.state)
+            except (AttributeError, TypeError, ValueError):
+                valid = False
+            else:
+                stove_active = self._stove_active[room.slug]
+                if stove_active:
+                    stove_active = temperature >= room.stove_off_temperature
+                else:
+                    stove_active = temperature > room.stove_on_temperature
+                self._stove_active[room.slug] = stove_active
+                if stove_active:
+                    active_sources.append(room.stove_temperature_entity)
+        return (bool(active_sources) if valid else None), active_sources
+
     async def async_update(self, _now: datetime | None = None) -> None:
         now = dt_util.now()
         month = now.strftime("%Y-%m")
@@ -149,11 +188,22 @@ class RuntimeData:
         for room in self.rooms:
             state = self.hass.states.get(room.climate_entity)
             current = None if state is None else valve_percentage(state.attributes)
+            external_heat, sources = self._read_external_heat(room)
+            self.external_heat_active[room.slug] = external_heat
+            self.external_heat_sources[room.slug] = sources
+            self.contact_open[room.slug] = bool(
+                state
+                and (
+                    state.attributes.get("window_open", False)
+                    or state.attributes.get("door_open", False)
+                )
+            )
             previous = self.valves.get(room.slug)
             if previous is not None and elapsed_hours:
                 self.hours[room.slug] += previous / 100.0 * elapsed_hours
             self.valves[room.slug] = current
-            self._update_heat_demand_baseline(room, current, elapsed_hours)
+            if external_heat is False and not self.contact_open[room.slug]:
+                self._update_heat_demand_baseline(room, current, elapsed_hours)
         self._last_sample = now
         self._store.async_delay_save(self._data_to_save, 300)
         for listener in list(self.listeners):

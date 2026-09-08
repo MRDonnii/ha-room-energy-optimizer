@@ -121,7 +121,12 @@ def test_room_from_dict_wizard_submission():
 def test_room_from_dict_rejects_duplicate_slug():
     try:
         model.room_from_dict(
-            {"name": "Stue", "climate_entity": "climate.stue", "rated_power_w": 1000, "area_m2": 20},
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 1000,
+                "area_m2": 20,
+            },
             existing_slugs={"stue"},
         )
     except ValueError as err:
@@ -165,3 +170,41 @@ def test_rooms_from_options_rejects_empty_list():
         assert "at least one room" in str(err)
     else:
         raise AssertionError("empty room list accepted")
+
+
+def test_room_external_heat_configuration_round_trip():
+    room = model.room_from_dict(
+        {
+            "name": "Stue",
+            "climate_entity": "climate.stue",
+            "rated_power_w": 5193,
+            "area_m2": 44,
+            "radiator_count": 2,
+            "external_heat_entities": ["climate.heat_pump", "binary_sensor.fireplace"],
+            "stove_temperature_entity": "sensor.stove_temperature",
+            "stove_on_temperature": 25,
+            "stove_off_temperature": 24,
+        },
+        existing_slugs=set(),
+    )
+    restored = model.rooms_from_options([model.room_to_dict(room)])[0]
+    assert restored == room
+
+
+def test_room_rejects_invalid_stove_hysteresis():
+    try:
+        model.room_from_dict(
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 5193,
+                "area_m2": 44,
+                "stove_on_temperature": 24,
+                "stove_off_temperature": 25,
+            },
+            existing_slugs=set(),
+        )
+    except ValueError as err:
+        assert "below" in str(err)
+    else:
+        raise AssertionError("invalid stove hysteresis was accepted")

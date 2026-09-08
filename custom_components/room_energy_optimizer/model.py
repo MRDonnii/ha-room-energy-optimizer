@@ -22,6 +22,10 @@ class RoomConfig:
     area_m2: float
     radiator_count: int = 1
     initial_valve_hours: float = 0.0
+    external_heat_entities: tuple[str, ...] = ()
+    stove_temperature_entity: str = ""
+    stove_on_temperature: float = 25.0
+    stove_off_temperature: float = 24.0
 
 
 def slugify(value: str) -> str:
@@ -74,6 +78,10 @@ def room_to_dict(room: RoomConfig) -> dict[str, Any]:
         "area_m2": room.area_m2,
         "radiator_count": room.radiator_count,
         "initial_valve_hours": room.initial_valve_hours,
+        "external_heat_entities": list(room.external_heat_entities),
+        "stove_temperature_entity": room.stove_temperature_entity,
+        "stove_on_temperature": room.stove_on_temperature,
+        "stove_off_temperature": room.stove_off_temperature,
     }
 
 
@@ -93,11 +101,35 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
         area = float(str(data["area_m2"]).replace(",", "."))
         radiator_count = int(float(str(data.get("radiator_count", 1) or 1).replace(",", ".")))
         initial_hours = float(str(data.get("initial_valve_hours", 0) or 0).replace(",", "."))
+        stove_on = float(str(data.get("stove_on_temperature", 25) or 25).replace(",", "."))
+        stove_off = float(str(data.get("stove_off_temperature", 24) or 24).replace(",", "."))
     except (KeyError, TypeError, ValueError) as err:
         raise ValueError("power, area and radiator count must be numbers") from err
     if rated <= 0 or area <= 0 or radiator_count <= 0 or initial_hours < 0:
         raise ValueError("power, area and radiator count must be positive")
-    return RoomConfig(name, slug, climate_entity, rated, area, radiator_count, initial_hours)
+    external_heat_entities = tuple(
+        str(entity_id)
+        for entity_id in data.get("external_heat_entities", [])
+        if str(entity_id).startswith(("binary_sensor.", "climate."))
+    )
+    stove_entity = str(data.get("stove_temperature_entity", "") or "")
+    if stove_entity and not stove_entity.startswith("sensor."):
+        raise ValueError("stove temperature entity must be a sensor")
+    if stove_off >= stove_on:
+        raise ValueError("stove off temperature must be below on temperature")
+    return RoomConfig(
+        name,
+        slug,
+        climate_entity,
+        rated,
+        area,
+        radiator_count,
+        initial_hours,
+        external_heat_entities,
+        stove_entity,
+        stove_on,
+        stove_off,
+    )
 
 
 def rooms_from_options(raw: list[dict[str, Any]] | str) -> list[RoomConfig]:

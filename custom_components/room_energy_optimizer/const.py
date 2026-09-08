@@ -2,7 +2,7 @@
 
 DOMAIN = "room_energy_optimizer"
 PLATFORMS = ["sensor", "binary_sensor"]
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"
@@ -10,6 +10,10 @@ CONF_OUTDOOR_TEMPERATURE = "outdoor_temperature_entity"
 CONF_MONTHLY_COST = "monthly_cost_entity"
 CONF_MONTHLY_COST_BASELINE = "monthly_cost_baseline_entity"
 CONF_ROOMS = "rooms"
+CONF_EXTERNAL_HEAT_ENTITIES = "external_heat_entities"
+CONF_STOVE_TEMPERATURE = "stove_temperature_entity"
+CONF_STOVE_ON_TEMPERATURE = "stove_on_temperature"
+CONF_STOVE_OFF_TEMPERATURE = "stove_off_temperature"
 
 SYSTEM_ONE_PIPE = "one_pipe"
 SYSTEM_TWO_PIPE = "two_pipe"

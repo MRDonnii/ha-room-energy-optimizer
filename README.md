@@ -6,12 +6,12 @@ hydronic radiator systems, including one-pipe installations where a shared
 return temperature is not a reliable representation of an individual
 radiator.
 
-The integration is **read-only**. It never changes thermostat setpoints,
-valves or heating equipment. It reads Better Thermostat's public
-`calibration_balance` attribute when available, but contains no Better
-Thermostat patch, learning override or copied Better Thermostat code.
+The integration never changes thermostat setpoints, valves or heating
+equipment. It reads Better Thermostat's public attributes and can optionally
+publish an external-heat learning guard. A cold room can therefore keep
+receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.4.0**
+**Current version: 1.5.0**
 
 ## What it provides
 
@@ -49,6 +49,23 @@ house-wide number, and is weather-normalised so a cold day does not by
 itself look like a deviation. A sustained `deviating` state can indicate a
 stuck valve, an open window, air in the radiator, or a miscalibrated rated
 power/area value.
+
+## Better Thermostat, external heat and opening contacts
+
+For each room you can optionally select heat-pump climate entities, external-
+heat binary sensors, and a stove temperature sensor with separate on/off
+thresholds. Climate sources count only while `hvac_action` is `heating`; the
+stove thresholds use hysteresis.
+
+External-heat periods are excluded from the integration's learned demand
+baseline and publish a Better Thermostat learning guard. Radiator control and
+target temperatures are left untouched. Better Thermostat's debounced
+`window_open` and `door_open` attributes are mirrored automatically, and
+open-contact periods are excluded from baseline learning too.
+
+Pausing Better Thermostat's internal learner requires a compatible Better
+Thermostat build exposing `thermal_learning_paused`. Data problem reports a
+missing hook explicitly instead of silently claiming that learning is paused.
 
 ## Installation with HACS
 

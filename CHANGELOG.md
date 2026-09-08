@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+- Added optional heat-pump, binary external-heat and stove-temperature
+  configuration per room, including stove hysteresis.
+- Added external-heat and opening-contact binary sensors per room.
+- Better Thermostat's debounced window/door state is consumed automatically.
+- External-heat and open-contact periods no longer feed the learned demand baseline.
+- Data health now detects missing external inputs and missing BT guard support.
+- Fixed two Ruff formatting failures introduced with the 1.4.0 setup wizard.
+
 ## 1.4.0
 
 - Setup and editing now add rooms one at a time through a proper wizard step
