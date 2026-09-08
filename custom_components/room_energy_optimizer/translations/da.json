@@ -97,6 +97,25 @@
         "data": {
           "room": "Rum der skal fjernes"
         }
+      },
+      "select_room_to_edit": {
+        "title": "Redigér et rum",
+        "data": {"room": "Rum der skal redigeres"}
+      },
+      "edit_room": {
+        "title": "Redigér rum",
+        "data": {
+          "name": "Rumnavn",
+          "climate_entity": "Climate-entitet",
+          "rated_power_w": "Nominel radiator-effekt",
+          "area_m2": "Rumareal",
+          "radiator_count": "Antal radiatorer",
+          "initial_valve_hours": "Eksisterende ventiltimer denne måned",
+          "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
+          "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
+          "stove_on_temperature": "Brændeovn aktiv over",
+          "stove_off_temperature": "Brændeovn inaktiv under"
+        }
       }
     },
     "error": {
@@ -114,6 +133,7 @@
     "manage_rooms_action": {
       "options": {
         "add": "Tilføj et rum",
+        "edit": "Redigér et rum",
         "remove": "Fjern et rum",
         "done": "Færdig - gem ændringer"
       }

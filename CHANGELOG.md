@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+
+- Added in-place room editing to the options GUI, including all external-heat
+  and stove settings, without deleting the room or resetting its stored data.
+
 ## 1.5.0
 
 - Added optional heat-pump, binary external-heat and stove-temperature

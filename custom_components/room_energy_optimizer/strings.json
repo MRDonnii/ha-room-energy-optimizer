@@ -97,6 +97,25 @@
         "data": {
           "room": "Room to remove"
         }
+      },
+      "select_room_to_edit": {
+        "title": "Edit a room",
+        "data": {"room": "Room to edit"}
+      },
+      "edit_room": {
+        "title": "Edit room",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month",
+          "external_heat_entities": "Heat pumps or external-heat binary sensors",
+          "stove_temperature_entity": "Stove temperature sensor (optional)",
+          "stove_on_temperature": "Stove active above",
+          "stove_off_temperature": "Stove inactive below"
+        }
       }
     },
     "error": {
@@ -114,6 +133,7 @@
     "manage_rooms_action": {
       "options": {
         "add": "Add a room",
+        "edit": "Edit a room",
         "remove": "Remove a room",
         "done": "Done - save changes"
       }

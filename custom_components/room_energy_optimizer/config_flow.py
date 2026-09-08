@@ -67,14 +67,18 @@ def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
     return errors
 
 
-def _room_schema() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required("name"): str,
-            vol.Required("climate_entity"): selector.EntitySelector(
+def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True) -> vol.Schema:
+    defaults = defaults or {}
+    def required(key: str, fallback=vol.UNDEFINED):
+        value = defaults.get(key, fallback)
+        return vol.Required(key) if value is vol.UNDEFINED else vol.Required(key, default=value)
+
+    fields: dict[Any, Any] = {
+            required("name"): str,
+            required("climate_entity"): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
             ),
-            vol.Required("rated_power_w"): selector.NumberSelector(
+            required("rated_power_w"): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=1,
                     max=20000,
@@ -83,7 +87,7 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="W",
                 )
             ),
-            vol.Required("area_m2"): selector.NumberSelector(
+            required("area_m2"): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0.5,
                     max=500,
@@ -92,12 +96,14 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="m²",
                 )
             ),
-            vol.Required("radiator_count", default=1): selector.NumberSelector(
+            required("radiator_count", 1): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=1, max=20, step=1, mode=selector.NumberSelectorMode.BOX
                 )
             ),
-            vol.Optional("initial_valve_hours", default=0): selector.NumberSelector(
+            vol.Optional(
+                "initial_valve_hours", default=defaults.get("initial_valve_hours", 0)
+            ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0,
                     step=0.01,
@@ -105,15 +111,22 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="h",
                 )
             ),
-            vol.Optional("external_heat_entities", default=[]): selector.EntitySelector(
+            vol.Optional(
+                "external_heat_entities", default=defaults.get("external_heat_entities", [])
+            ): selector.EntitySelector(
                 selector.EntitySelectorConfig(
                     domain=["binary_sensor", "climate"], multiple=True
                 )
             ),
-            vol.Optional("stove_temperature_entity"): selector.EntitySelector(
+            vol.Optional(
+                "stove_temperature_entity",
+                default=defaults.get("stove_temperature_entity", ""),
+            ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
             ),
-            vol.Optional("stove_on_temperature", default=25): selector.NumberSelector(
+            vol.Optional(
+                "stove_on_temperature", default=defaults.get("stove_on_temperature", 25)
+            ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0,
                     max=100,
@@ -122,7 +135,9 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="°C",
                 )
             ),
-            vol.Optional("stove_off_temperature", default=24): selector.NumberSelector(
+            vol.Optional(
+                "stove_off_temperature", default=defaults.get("stove_off_temperature", 24)
+            ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0,
                     max=100,
@@ -131,9 +146,10 @@ def _room_schema() -> vol.Schema:
                     unit_of_measurement="°C",
                 )
             ),
-            vol.Required("add_another_room", default=True): selector.BooleanSelector(),
-        }
-    )
+    }
+    if adding:
+        fields[vol.Required("add_another_room", default=True)] = selector.BooleanSelector()
+    return vol.Schema(fields)
 
 
 class RoomWizardSteps:
@@ -240,6 +256,8 @@ class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
             action = user_input["action"]
             if action == "add":
                 return await self.async_step_add_room()
+            if action == "edit":
+                return await self.async_step_select_room_to_edit()
             if action == "remove":
                 return await self.async_step_remove_room()
             options = {**self._data, CONF_ROOMS: self._rooms}
@@ -251,7 +269,7 @@ class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
                 {
                     vol.Required("action", default="done"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=["add", "remove", "done"],
+                            options=["add", "edit", "remove", "done"],
                             translation_key="manage_rooms_action",
                             mode=selector.SelectSelectorMode.LIST,
                         )
@@ -279,4 +297,47 @@ class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
                     )
                 }
             ),
+        )
+
+    async def async_step_select_room_to_edit(self, user_input=None):
+        if user_input is not None:
+            self._editing_room_name = user_input["room"]
+            return await self.async_step_edit_room()
+        return self.async_show_form(
+            step_id="select_room_to_edit",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("room"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[room["name"] for room in self._rooms],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_edit_room(self, user_input=None):
+        current = next(room for room in self._rooms if room["name"] == self._editing_room_name)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            existing_slugs = {
+                slugify(room["name"])
+                for room in self._rooms
+                if room["name"] != self._editing_room_name
+            }
+            try:
+                updated = room_from_dict(user_input, existing_slugs)
+            except ValueError:
+                errors["base"] = "invalid_room"
+            else:
+                self._rooms = [
+                    room_to_dict(updated) if room["name"] == self._editing_room_name else room
+                    for room in self._rooms
+                ]
+                return await self.async_step_manage_rooms()
+        return self.async_show_form(
+            step_id="edit_room",
+            data_schema=_room_schema(current, adding=False),
+            errors=errors,
         )
