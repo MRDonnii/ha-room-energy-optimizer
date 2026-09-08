@@ -1,4 +1,11 @@
-"""Config flow for Room Energy Optimizer."""
+"""Config flow for Room Energy Optimizer.
+
+Rooms are configured one at a time through a small repeating wizard step
+(`async_step_add_room`) instead of one free-text field, so each room gets
+proper entity/number pickers and inline validation. `RoomWizardSteps` holds
+that shared step so both the initial setup flow and the later options flow
+use the same one-room-at-a-time form.
+"""
 
 from __future__ import annotations
 
@@ -20,10 +27,10 @@ from .const import (
     SYSTEM_ONE_PIPE,
     SYSTEM_TWO_PIPE,
 )
-from .model import parse_rooms
+from .model import room_from_dict, room_to_dict, rooms_from_options, slugify
 
 
-def _schema(defaults: dict[str, Any]) -> vol.Schema:
+def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Room Energy Optimizer")): str,
@@ -47,25 +54,12 @@ def _schema(defaults: dict[str, Any]) -> vol.Schema:
                 CONF_MONTHLY_COST_BASELINE,
                 default=defaults.get(CONF_MONTHLY_COST_BASELINE, ""),
             ): str,
-            vol.Required(
-                CONF_ROOMS,
-                default=defaults.get(
-                    CONF_ROOMS,
-                    "Living room|climate.living_room|2000|30\nBedroom|climate.bedroom|1000|15",
-                ),
-            ): selector.TextSelector(
-                selector.TextSelectorConfig(multiline=True, type=selector.TextSelectorType.TEXT)
-            ),
         }
     )
 
 
-def _validate(user_input: dict[str, Any]) -> dict[str, str]:
+def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
     errors: dict[str, str] = {}
-    try:
-        parse_rooms(user_input.get(CONF_ROOMS, ""))
-    except ValueError:
-        errors[CONF_ROOMS] = "invalid_rooms"
     for key in (CONF_OUTDOOR_TEMPERATURE, CONF_MONTHLY_COST, CONF_MONTHLY_COST_BASELINE):
         entity_id = user_input.get(key, "").strip()
         if entity_id and not entity_id.startswith(("sensor.", "input_number.")):
@@ -73,43 +67,189 @@ def _validate(user_input: dict[str, Any]) -> dict[str, str]:
     return errors
 
 
-class RoomEnergyOptimizerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Set up the integration."""
+def _room_schema() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required("name"): str,
+            vol.Required("climate_entity"): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate")
+            ),
+            vol.Required("rated_power_w"): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1,
+                    max=20000,
+                    step=1,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="W",
+                )
+            ),
+            vol.Required("area_m2"): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.5,
+                    max=500,
+                    step=0.1,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="m²",
+                )
+            ),
+            vol.Required("radiator_count", default=1): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=20, step=1, mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+            vol.Optional("initial_valve_hours", default=0): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    step=0.01,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="h",
+                )
+            ),
+            vol.Required("add_another_room", default=True): selector.BooleanSelector(),
+        }
+    )
+
+
+class RoomWizardSteps:
+    """Shared one-room-at-a-time step for config and options flows.
+
+    A subclass sets `self._rooms` (list of room dicts already configured in
+    this flow session) and `self._after_rooms_step` (the step name to return
+    to once the user stops adding rooms) before entering `async_step_add_room`.
+    """
+
+    _rooms: list[dict[str, Any]]
+    _after_rooms_step: str
+
+    async def async_step_add_room(self, user_input: dict[str, Any] | None = None):
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            add_another = bool(user_input.pop("add_another_room", True))
+            existing_slugs = {slugify(room["name"]) for room in self._rooms}
+            try:
+                room = room_from_dict(user_input, existing_slugs)
+            except ValueError:
+                errors["base"] = "invalid_room"
+            else:
+                self._rooms.append(room_to_dict(room))
+                if add_another:
+                    return await self.async_step_add_room()
+                return await getattr(self, f"async_step_{self._after_rooms_step}")()
+        return self.async_show_form(
+            step_id="add_room",
+            data_schema=_room_schema(),
+            errors=errors,
+            description_placeholders={
+                "room_number": str(len(self._rooms) + 1),
+                "rooms_so_far": ", ".join(room["name"] for room in self._rooms) or "–",
+            },
+        )
+
+
+class RoomEnergyOptimizerConfigFlow(
+    config_entries.ConfigFlow, RoomWizardSteps, domain=DOMAIN
+):
+    """Set up the integration: settings once, then rooms one at a time."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+        self._rooms: list[dict[str, Any]] = []
+        self._after_rooms_step = "finish"
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate(user_input)
+            errors = _validate_settings(user_input)
             if not errors:
                 await self.async_set_unique_id("main")
                 self._abort_if_unique_id_configured()
-                title = user_input.pop(CONF_NAME)
-                return self.async_create_entry(title=title, data={}, options=user_input)
+                self._data = user_input
+                return await self.async_step_add_room()
         return self.async_show_form(
-            step_id="user", data_schema=_schema(user_input or {}), errors=errors
+            step_id="user", data_schema=_settings_schema(user_input or {}), errors=errors
         )
+
+    async def async_step_finish(self, user_input: dict[str, Any] | None = None):
+        title = self._data.pop(CONF_NAME)
+        options = {**self._data, CONF_ROOMS: self._rooms}
+        return self.async_create_entry(title=title, data={}, options=options)
 
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
         return OptionsFlow(config_entry)
 
 
-class OptionsFlow(config_entries.OptionsFlow):
-    """Edit the full configuration safely through the UI."""
+class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
+    """Edit settings, then add or remove rooms one at a time."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
+        self._data: dict[str, Any] = {}
+        # `rooms_from_options` + `room_to_dict` also tolerates a still-legacy
+        # string here (defensive only - `_async_migrate_room_storage` in
+        # __init__.py normally converts it before this flow can be opened).
+        self._rooms: list[dict[str, Any]] = [
+            room_to_dict(room) for room in rooms_from_options(config_entry.options.get(CONF_ROOMS, []))
+        ]
+        self._after_rooms_step = "manage_rooms"
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate(user_input)
+            errors = _validate_settings(user_input)
             if not errors:
                 user_input.pop(CONF_NAME, None)
-                return self.async_create_entry(title="", data=user_input)
+                self._data = user_input
+                return await self.async_step_manage_rooms()
         defaults = {CONF_NAME: self._entry.title, **self._entry.options}
         return self.async_show_form(
-            step_id="init", data_schema=_schema(user_input or defaults), errors=errors
+            step_id="init", data_schema=_settings_schema(user_input or defaults), errors=errors
+        )
+
+    async def async_step_manage_rooms(self, user_input: dict[str, Any] | None = None):
+        if user_input is not None:
+            action = user_input["action"]
+            if action == "add":
+                return await self.async_step_add_room()
+            if action == "remove":
+                return await self.async_step_remove_room()
+            options = {**self._data, CONF_ROOMS: self._rooms}
+            return self.async_create_entry(title="", data=options)
+        room_names = ", ".join(room["name"] for room in self._rooms) or "–"
+        return self.async_show_form(
+            step_id="manage_rooms",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action", default="done"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=["add", "remove", "done"],
+                            translation_key="manage_rooms_action",
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"rooms_so_far": room_names},
+        )
+
+    async def async_step_remove_room(self, user_input: dict[str, Any] | None = None):
+        if not self._rooms:
+            return await self.async_step_manage_rooms()
+        if user_input is not None:
+            self._rooms = [room for room in self._rooms if room["name"] != user_input["room"]]
+            return await self.async_step_manage_rooms()
+        return self.async_show_form(
+            step_id="remove_room",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("room"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[room["name"] for room in self._rooms],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
         )

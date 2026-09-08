@@ -11,7 +11,7 @@ valves or heating equipment. It reads Better Thermostat's public
 `calibration_balance` attribute when available, but contains no Better
 Thermostat patch, learning override or copied Better Thermostat code.
 
-**Current version: 1.3.0**
+**Current version: 1.4.0**
 
 ## What it provides
 
@@ -62,31 +62,39 @@ repository step is required.
 
 ## Configuration
 
-Choose the heating system type and a flow-temperature sensor. Add one room per
-line using:
+Setup is a short wizard:
 
-```text
-Living room|climate.living_room|2000|30
-Bedroom|climate.bedroom|1000|15
-```
+1. Choose the heating system type, a flow-temperature sensor, and optionally
+   an outdoor temperature sensor and monthly-cost sensors.
+2. Add rooms one at a time: name, a climate entity picker, rated radiator
+   output (W), room area (m²), and number of radiators. Tick "Add another
+   room" to keep going, or leave it unticked to finish.
 
-The fields are room name, climate entity, rated radiator output in watts and
-room area in square metres. Decimal comma and decimal point are accepted.
-During migration, a fifth field can seed already accumulated valve-hours:
+A room's "Existing valve-hours this month" field is only for migrating an
+older setup mid-month; leave it at 0 for a normal new room. It is only used
+when no saved value exists yet for the current month.
 
-```text
-Living room|climate.living_room|2000|30|12.45
-```
-
-The seed is only used when no saved value exists for the current month.
-
-An optional outdoor temperature sensor entity ID enables the heat demand
-status sensor described above.
+An optional outdoor temperature sensor enables the heat demand status sensor
+described above.
 
 An optional monthly heating-cost sensor can be selected by entity ID. Its
 value is allocated using monthly valve-hours multiplied by rated radiator
 power, not valve-hours alone. An optional baseline entity can subtract costs
 that predate installation during the first month.
+
+### Editing rooms later
+
+Settings → Devices & services → Room Energy Optimizer → Configure opens the
+same settings screen, followed by a "Manage rooms" screen where you can add
+a room (same one-at-a-time wizard) or remove one by name. There is currently
+no in-place edit for a single room's numbers - remove it and add it again
+with the corrected values; its accumulated valve-hours and heat-demand
+baseline are keyed by room name and survive that.
+
+### Upgrading from 1.3.x or earlier
+
+The old `Name|climate.entity|watts|area` text field is migrated
+automatically the first time this version loads - nothing to do by hand.
 
 ## Calculation limits
 

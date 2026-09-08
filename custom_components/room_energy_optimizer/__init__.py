@@ -28,7 +28,8 @@ from .model import (
     RoomConfig,
     estimated_power,
     heat_demand_ratio,
-    parse_rooms,
+    room_to_dict,
+    rooms_from_options,
     update_ema,
     valve_percentage,
 )
@@ -40,7 +41,7 @@ class RuntimeData:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self.rooms: list[RoomConfig] = parse_rooms(entry.options.get(CONF_ROOMS, ""))
+        self.rooms: list[RoomConfig] = rooms_from_options(entry.options.get(CONF_ROOMS, []))
         self.valves: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.hours: dict[str, float] = {room.slug: room.initial_valve_hours for room in self.rooms}
         # Weather-normalised heat-demand baseline (W per °C of indoor/outdoor
@@ -181,7 +182,23 @@ class RuntimeData:
         await self._store.async_save(self._data_to_save())
 
 
+async def _async_migrate_room_storage(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """One-time upgrade from the pre-1.4.0 pipe-delimited rooms string.
+
+    Runs before the update listener is registered, so this does not trigger
+    a self-inflicted reload. Existing valve-hours and heat-demand baselines
+    are keyed by room slug and are unaffected by the storage format change.
+    """
+    raw = entry.options.get(CONF_ROOMS, [])
+    if not isinstance(raw, str):
+        return
+    rooms = rooms_from_options(raw)
+    new_options = {**entry.options, CONF_ROOMS: [room_to_dict(room) for room in rooms]}
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    await _async_migrate_room_storage(hass, entry)
     runtime = RuntimeData(hass, entry)
     await runtime.async_start()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime

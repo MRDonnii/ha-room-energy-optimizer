@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+- Setup and editing now add rooms one at a time through a proper wizard step
+  (name, a climate entity picker, rated radiator output, room area and
+  number of radiators) instead of one free-text field with pipe-delimited
+  lines.
+- Added a "Number of radiators" field and matching per-room sensor. It is
+  informational only for now; the power estimate still uses the room's
+  combined rated output, not a per-radiator split.
+- The options flow can now add or remove rooms after setup without retyping
+  the ones you already have.
+- Existing installs are migrated automatically on first load of this
+  version: the old pipe-delimited rooms string is parsed once and saved back
+  in the new format. Valve-hours and the heat-demand baseline are keyed by
+  room slug and are unaffected.
+
 ## 1.3.1
 
 - Renamed the shared hub device from the entry title alone (identical to the

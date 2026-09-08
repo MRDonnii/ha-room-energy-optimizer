@@ -4,24 +4,38 @@
     "step": {
       "user": {
         "title": "Configure room heating",
-        "description": "Creates read-only energy estimates. It never controls thermostats and does not modify Better Thermostat.",
+        "description": "Creates read-only energy estimates. It never controls thermostats and does not modify Better Thermostat. Rooms are added one at a time on the next screen.",
         "data": {
           "name": "Name",
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
-          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
-          "rooms": "Rooms"
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
-          "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room."
+        }
+      },
+      "add_room": {
+        "title": "Room {room_number}",
+        "description": "Rooms so far: {rooms_so_far}",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "add_another_room": "Add another room"
+        },
+        "data_description": {
+          "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup."
         }
       }
     },
     "error": {
-      "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
+      "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
       "invalid_sensor": "The optional sensor entity must start with sensor."
     },
     "abort": {"already_configured": "Room Energy Optimizer is already configured."}
@@ -29,25 +43,52 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit room heating",
-        "description": "Changes reload the integration. Existing monthly counters are retained for unchanged room names.",
+        "title": "Edit settings",
+        "description": "Changes reload the integration. Rooms are managed on the next screen.",
         "data": {
           "name": "Name",
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
-          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
-          "rooms": "Rooms"
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
-          "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room."
+        }
+      },
+      "manage_rooms": {
+        "title": "Manage rooms",
+        "description": "Configured rooms: {rooms_so_far}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_room": {
+        "title": "Room {room_number}",
+        "description": "Rooms so far: {rooms_so_far}",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "add_another_room": "Add another room"
+        },
+        "data_description": {
+          "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup."
+        }
+      },
+      "remove_room": {
+        "title": "Remove a room",
+        "data": {
+          "room": "Room to remove"
         }
       }
     },
     "error": {
-      "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
+      "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
       "invalid_sensor": "The optional sensor entity must start with sensor."
     }
   },
@@ -56,6 +97,13 @@
       "options": {
         "one_pipe": "One-pipe system",
         "two_pipe": "Two-pipe system"
+      }
+    },
+    "manage_rooms_action": {
+      "options": {
+        "add": "Add a room",
+        "remove": "Remove a room",
+        "done": "Done - save changes"
       }
     }
   },

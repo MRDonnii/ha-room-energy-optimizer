@@ -54,6 +54,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     runtime, room, "area", "Room area", UnitOfArea.SQUARE_METERS, "mdi:set-square"
                 ),
                 RoomSensor(
+                    runtime, room, "radiator_count", "Radiator count", None, "mdi:radiator"
+                ),
+                RoomSensor(
                     runtime,
                     room,
                     "rated_power",
@@ -156,6 +159,8 @@ class RoomSensor(OptimizerEntity, SensorEntity):
             return round(distributable * weighted / total_weighted, 2) if total_weighted > 0 else 0
         if self.kind == "rated_power":
             return self.room.rated_power_w
+        if self.kind == "radiator_count":
+            return self.room.radiator_count
         if self.kind == "heat_loss":
             climate = self.hass.states.get(self.room.climate_entity)
             try:

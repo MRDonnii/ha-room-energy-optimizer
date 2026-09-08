@@ -4,24 +4,38 @@
     "step": {
       "user": {
         "title": "Konfigurer rumopvarmning",
-        "description": "Opretter skrivebeskyttede energi-estimater. Integrationen styrer aldrig termostater og ændrer ikke Better Thermostat.",
+        "description": "Opretter skrivebeskyttede energi-estimater. Integrationen styrer aldrig termostater og ændrer ikke Better Thermostat. Rum tilføjes ét ad gangen på næste skærm.",
         "data": {
           "name": "Navn",
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
-          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
-          "rooms": "Rum"
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
-          "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum."
+        }
+      },
+      "add_room": {
+        "title": "Rum {room_number}",
+        "description": "Rum indtil videre: {rooms_so_far}",
+        "data": {
+          "name": "Rumnavn",
+          "climate_entity": "Climate-entitet",
+          "rated_power_w": "Nominel radiator-effekt",
+          "area_m2": "Rumareal",
+          "radiator_count": "Antal radiatorer",
+          "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "add_another_room": "Tilføj endnu et rum"
+        },
+        "data_description": {
+          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning."
         }
       }
     },
     "error": {
-      "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
+      "invalid_room": "Angiv et unikt rumnavn, en climate-entitet og positive tal for effekt, areal og antal radiatorer.",
       "invalid_sensor": "Den valgfrie sensor-entitet skal begynde med sensor."
     },
     "abort": {"already_configured": "Rumenergioptimering er allerede konfigureret."}
@@ -29,25 +43,52 @@
   "options": {
     "step": {
       "init": {
-        "title": "Rediger rumopvarmning",
-        "description": "Ændringer genindlæser integrationen. Månedstællere bevares for uændrede rumnavne.",
+        "title": "Rediger indstillinger",
+        "description": "Ændringer genindlæser integrationen. Rum administreres på næste skærm.",
         "data": {
           "name": "Navn",
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
-          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
-          "rooms": "Rum"
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
-          "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum."
+        }
+      },
+      "manage_rooms": {
+        "title": "Administrer rum",
+        "description": "Konfigurerede rum: {rooms_so_far}",
+        "data": {
+          "action": "Handling"
+        }
+      },
+      "add_room": {
+        "title": "Rum {room_number}",
+        "description": "Rum indtil videre: {rooms_so_far}",
+        "data": {
+          "name": "Rumnavn",
+          "climate_entity": "Climate-entitet",
+          "rated_power_w": "Nominel radiator-effekt",
+          "area_m2": "Rumareal",
+          "radiator_count": "Antal radiatorer",
+          "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "add_another_room": "Tilføj endnu et rum"
+        },
+        "data_description": {
+          "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning."
+        }
+      },
+      "remove_room": {
+        "title": "Fjern et rum",
+        "data": {
+          "room": "Rum der skal fjernes"
         }
       }
     },
     "error": {
-      "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
+      "invalid_room": "Angiv et unikt rumnavn, en climate-entitet og positive tal for effekt, areal og antal radiatorer.",
       "invalid_sensor": "Den valgfrie sensor-entitet skal begynde med sensor."
     }
   },
@@ -56,6 +97,13 @@
       "options": {
         "one_pipe": "Et-strengsanlæg",
         "two_pipe": "To-strengsanlæg"
+      }
+    },
+    "manage_rooms_action": {
+      "options": {
+        "add": "Tilføj et rum",
+        "remove": "Fjern et rum",
+        "done": "Færdig - gem ændringer"
       }
     }
   },

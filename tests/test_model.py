@@ -100,3 +100,68 @@ def test_classify_heat_demand_normal_within_threshold():
 
 def test_classify_heat_demand_deviating_beyond_threshold():
     assert model.classify_heat_demand(90.0, 50.0, 100.0, 48.0, 0.4) == "deviating"
+
+
+def test_room_from_dict_wizard_submission():
+    room = model.room_from_dict(
+        {
+            "name": "Køkken",
+            "climate_entity": "climate.kitchen",
+            "rated_power_w": 1129,
+            "area_m2": "18,5",
+            "radiator_count": 2,
+        },
+        existing_slugs=set(),
+    )
+    assert room.slug == "koekken"
+    assert room.radiator_count == 2
+    assert room.initial_valve_hours == 0.0
+
+
+def test_room_from_dict_rejects_duplicate_slug():
+    try:
+        model.room_from_dict(
+            {"name": "Stue", "climate_entity": "climate.stue", "rated_power_w": 1000, "area_m2": 20},
+            existing_slugs={"stue"},
+        )
+    except ValueError as err:
+        assert "duplicate" in str(err)
+    else:
+        raise AssertionError("duplicate room name accepted")
+
+
+def test_room_to_dict_round_trips_through_room_from_dict():
+    original = model.RoomConfig("Stue", "stue", "climate.stue", 5193.0, 44.0, 3, 1.5)
+    data = model.room_to_dict(original)
+    rebuilt = model.room_from_dict(data, existing_slugs=set())
+    assert rebuilt == original
+
+
+def test_rooms_from_options_accepts_legacy_string():
+    rooms = model.rooms_from_options("Stue|climate.stue|5193|44")
+    assert rooms[0].name == "Stue"
+    assert rooms[0].radiator_count == 1
+
+
+def test_rooms_from_options_accepts_wizard_list():
+    rooms = model.rooms_from_options(
+        [
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 5193,
+                "area_m2": 44,
+                "radiator_count": 3,
+            }
+        ]
+    )
+    assert rooms[0].radiator_count == 3
+
+
+def test_rooms_from_options_rejects_empty_list():
+    try:
+        model.rooms_from_options([])
+    except ValueError as err:
+        assert "at least one room" in str(err)
+    else:
+        raise AssertionError("empty room list accepted")

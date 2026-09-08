@@ -20,6 +20,7 @@ class RoomConfig:
     climate_entity: str
     rated_power_w: float
     area_m2: float
+    radiator_count: int = 1
     initial_valve_hours: float = 0.0
 
 
@@ -58,7 +59,62 @@ def parse_rooms(raw: str) -> list[RoomConfig]:
         if slug in seen:
             raise ValueError(f"line {number}: duplicate room name")
         seen.add(slug)
-        rooms.append(RoomConfig(name, slug, climate_entity, rated, area, initial_hours))
+        rooms.append(RoomConfig(name, slug, climate_entity, rated, area, 1, initial_hours))
+    if not rooms:
+        raise ValueError("at least one room is required")
+    return rooms
+
+
+def room_to_dict(room: RoomConfig) -> dict[str, Any]:
+    """Serialise a room for config entry option storage."""
+    return {
+        "name": room.name,
+        "climate_entity": room.climate_entity,
+        "rated_power_w": room.rated_power_w,
+        "area_m2": room.area_m2,
+        "radiator_count": room.radiator_count,
+        "initial_valve_hours": room.initial_valve_hours,
+    }
+
+
+def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig:
+    """Build and validate one room from a step-by-step wizard submission."""
+    name = str(data.get("name", "")).strip()
+    slug = slugify(name)
+    if not name or not slug:
+        raise ValueError("invalid room name")
+    if slug in existing_slugs:
+        raise ValueError("duplicate room name")
+    climate_entity = str(data.get("climate_entity", ""))
+    if not climate_entity.startswith("climate."):
+        raise ValueError("climate entity must start with climate.")
+    try:
+        rated = float(str(data["rated_power_w"]).replace(",", "."))
+        area = float(str(data["area_m2"]).replace(",", "."))
+        radiator_count = int(float(str(data.get("radiator_count", 1) or 1).replace(",", ".")))
+        initial_hours = float(str(data.get("initial_valve_hours", 0) or 0).replace(",", "."))
+    except (KeyError, TypeError, ValueError) as err:
+        raise ValueError("power, area and radiator count must be numbers") from err
+    if rated <= 0 or area <= 0 or radiator_count <= 0 or initial_hours < 0:
+        raise ValueError("power, area and radiator count must be positive")
+    return RoomConfig(name, slug, climate_entity, rated, area, radiator_count, initial_hours)
+
+
+def rooms_from_options(raw: list[dict[str, Any]] | str) -> list[RoomConfig]:
+    """Build the configured room list from stored options.
+
+    Accepts either the current list-of-dicts format (the step-by-step setup
+    wizard, 1.4.0+) or the legacy pipe-delimited string format from 1.3.x and
+    earlier, so existing installs keep working without a manual re-setup.
+    """
+    if isinstance(raw, str):
+        return parse_rooms(raw)
+    rooms: list[RoomConfig] = []
+    seen: set[str] = set()
+    for entry in raw:
+        room = room_from_dict(entry, seen)
+        seen.add(room.slug)
+        rooms.append(room)
     if not rooms:
         raise ValueError("at least one room is required")
     return rooms
