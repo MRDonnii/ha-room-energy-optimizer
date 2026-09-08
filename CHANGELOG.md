@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+- Renamed the shared hub device from the entry title alone (identical to the
+  integration's own name) to "<title> (Totals)", so it no longer looks like
+  an eighth, unnamed room in the device list next to the per-room devices.
+
 ## 1.3.0
 
 - Each room now gets its own device, so it shows as its own entry (its own

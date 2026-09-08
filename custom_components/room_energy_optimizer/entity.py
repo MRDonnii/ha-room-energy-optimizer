@@ -22,7 +22,7 @@ class OptimizerEntity(Entity):
         if room is None:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, runtime.entry.entry_id)},
-                name=runtime.entry.title,
+                name=f"{runtime.entry.title} (Totals)",
                 manufacturer="Room Energy Optimizer",
                 model="Local hydronic estimator",
                 sw_version=VERSION,
