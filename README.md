@@ -11,9 +11,12 @@ valves or heating equipment. It reads Better Thermostat's public
 `calibration_balance` attribute when available, but contains no Better
 Thermostat patch, learning override or copied Better Thermostat code.
 
+**Current version: 1.3.0**
+
 ## What it provides
 
-For every configured room:
+Each configured room gets its own device (its own page under Settings ->
+Devices & services), with:
 
 - calculated valve opening;
 - persistent valve-hours for the current month;
@@ -21,10 +24,31 @@ For every configured room:
 - capacity utilisation;
 - weighted monthly heating share;
 - optional estimated monthly cost;
-- configured room area.
+- configured room area;
+- rated radiator output and learned heat loss (read from Better Thermostat);
+- a radiator-stressed binary sensor;
+- an optional weather-normalised heat demand status (see below).
 
 It also creates a total estimated heat-demand sensor and a data-health binary
-sensor. All calculations fail visibly when required source data is missing.
+sensor on a shared hub device. All calculations fail visibly when required
+source data is missing.
+
+## Heat demand status (optional)
+
+Set an outdoor temperature sensor in the configuration to enable a per-room
+"Heat demand status" sensor with three states:
+
+- `learning` - not enough data yet to judge (default: 48 hours of valid
+  samples);
+- `normal` - the room's current heat output per degree of indoor/outdoor
+  temperature difference is close to its own learned baseline;
+- `deviating` - it has moved more than 40% away from that baseline.
+
+The baseline is learned per room from its own history, not a fixed
+house-wide number, and is weather-normalised so a cold day does not by
+itself look like a deviation. A sustained `deviating` state can indicate a
+stuck valve, an open window, air in the radiator, or a miscalibrated rated
+power/area value.
 
 ## Installation with HACS
 
@@ -55,6 +79,9 @@ Living room|climate.living_room|2000|30|12.45
 ```
 
 The seed is only used when no saved value exists for the current month.
+
+An optional outdoor temperature sensor entity ID enables the heat demand
+status sensor described above.
 
 An optional monthly heating-cost sensor can be selected by entity ID. Its
 value is allocated using monthly valve-hours multiplied by rated radiator

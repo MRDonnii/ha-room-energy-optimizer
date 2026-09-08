@@ -9,12 +9,15 @@ from .const import (
     CONF_FLOW_TEMPERATURE,
     CONF_MONTHLY_COST,
     CONF_MONTHLY_COST_BASELINE,
+    CONF_OUTDOOR_TEMPERATURE,
     CONF_SYSTEM_TYPE,
     DOMAIN,
+    HEAT_DEMAND_DEVIATION_THRESHOLD,
+    HEAT_DEMAND_MIN_BASELINE_HOURS,
     SYSTEM_ONE_PIPE,
 )
 from .entity import OptimizerEntity
-from .model import estimated_power
+from .model import classify_heat_demand, estimated_power
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
@@ -66,6 +69,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     "°C/min",
                     "mdi:home-thermometer-outline",
                 ),
+                HeatDemandStatusSensor(runtime, room),
             ]
         )
     entities.append(TotalPowerSensor(runtime))
@@ -74,10 +78,10 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
 class RoomSensor(OptimizerEntity, SensorEntity):
     def __init__(self, runtime, room, kind, name, unit, icon) -> None:
-        super().__init__(runtime, f"{room.slug}_{kind}")
+        super().__init__(runtime, f"{room.slug}_{kind}", room=room)
         self.room = room
         self.kind = kind
-        self._attr_name = f"{room.name} {name}"
+        self._attr_name = name
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
         if kind in ("valve", "power", "capacity", "share", "heat_loss"):
@@ -159,6 +163,56 @@ class RoomSensor(OptimizerEntity, SensorEntity):
             except (AttributeError, TypeError, ValueError):
                 return 0
         return self.room.area_m2
+
+
+class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
+    """Whether a room's weather-normalised heat demand looks normal.
+
+    Compares a fast (recent) and a slow (learned baseline) moving average of
+    the room's own watt-per-degree-of-lift ratio. Requires the optional
+    outdoor temperature sensor to be configured; stays "learning" until
+    enough hours of valid samples have been collected.
+    """
+
+    _attr_icon = "mdi:thermometer-check"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["learning", "normal", "deviating"]
+    _attr_translation_key = "heat_demand_status"
+
+    def __init__(self, runtime, room) -> None:
+        super().__init__(runtime, f"{room.slug}_heat_demand_status", room=room)
+        self.room = room
+        self._attr_name = "Heat demand status"
+
+    @property
+    def available(self) -> bool:
+        return bool(self.runtime.entry.options.get(CONF_OUTDOOR_TEMPERATURE, ""))
+
+    @property
+    def native_value(self):
+        return classify_heat_demand(
+            self.runtime.ratio_recent[self.room.slug],
+            self.runtime.ratio_baseline[self.room.slug],
+            self.runtime.baseline_hours[self.room.slug],
+            HEAT_DEMAND_MIN_BASELINE_HOURS,
+            HEAT_DEMAND_DEVIATION_THRESHOLD,
+        )
+
+    @property
+    def extra_state_attributes(self):
+        recent = self.runtime.ratio_recent[self.room.slug]
+        baseline = self.runtime.ratio_baseline[self.room.slug]
+        deviation_percent = None
+        if recent is not None and baseline:
+            deviation_percent = round(100 * (recent - baseline) / baseline, 1)
+        return {
+            "current_w_per_degree": None if recent is None else round(recent, 2),
+            "learned_baseline_w_per_degree": None if baseline is None else round(baseline, 2),
+            "deviation_percent": deviation_percent,
+            "baseline_learning_hours": round(self.runtime.baseline_hours[self.room.slug], 1),
+            "baseline_ready": self.runtime.baseline_hours[self.room.slug]
+            >= HEAT_DEMAND_MIN_BASELINE_HOURS,
+        }
 
 
 class TotalPowerSensor(OptimizerEntity, SensorEntity):

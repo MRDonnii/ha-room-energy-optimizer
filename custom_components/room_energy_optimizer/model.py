@@ -112,3 +112,63 @@ def estimated_power(
     reference_lmtd = (50.0 - 20.0) / math.log(50.0 / 20.0)
     temperature_factor = max(0.0, lmtd / reference_lmtd) ** 1.3
     return max(0.0, rated_power_w * valve_percent / 100.0 * temperature_factor)
+
+
+def heat_demand_ratio(
+    power_w: float,
+    indoor_target: float,
+    outdoor_temp: float,
+    min_delta: float = 2.0,
+) -> float | None:
+    """Return estimated heat output per degree of indoor/outdoor lift (W/°C).
+
+    This normalises heat demand for outdoor temperature, so a room's ratio is
+    comparable across a mild and a cold day. Returns None when the lift is
+    too small for the ratio to be meaningful (near-zero denominator).
+    """
+    delta = indoor_target - outdoor_temp
+    if delta < min_delta:
+        return None
+    return power_w / delta
+
+
+def update_ema(
+    previous: float | None,
+    sample: float,
+    elapsed_hours: float,
+    half_life_hours: float,
+) -> float:
+    """Time-weighted exponential moving average update.
+
+    Unlike a fixed-alpha EMA, the weight given to `sample` scales with how
+    much time actually elapsed since the previous update, so a missed or
+    delayed poll does not silently change the effective averaging window.
+    """
+    if previous is None or elapsed_hours <= 0:
+        return sample
+    alpha = 1 - 0.5 ** (elapsed_hours / half_life_hours)
+    return previous + alpha * (sample - previous)
+
+
+def classify_heat_demand(
+    recent_ratio: float | None,
+    baseline_ratio: float | None,
+    baseline_hours: float,
+    min_baseline_hours: float,
+    deviation_threshold: float,
+) -> str:
+    """Classify a room's current weather-normalised heat demand.
+
+    Returns "learning" until enough baseline data exists to judge, then
+    "normal" or "deviating" depending on how far the recent ratio has moved
+    from the room's own learned baseline ratio.
+    """
+    if (
+        recent_ratio is None
+        or baseline_ratio is None
+        or baseline_ratio <= 0
+        or baseline_hours < min_baseline_hours
+    ):
+        return "learning"
+    deviation = abs(recent_ratio - baseline_ratio) / baseline_ratio
+    return "deviating" if deviation > deviation_threshold else "normal"

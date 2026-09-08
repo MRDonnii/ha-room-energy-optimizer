@@ -13,6 +13,7 @@ from .const import (
     CONF_FLOW_TEMPERATURE,
     CONF_MONTHLY_COST,
     CONF_MONTHLY_COST_BASELINE,
+    CONF_OUTDOOR_TEMPERATURE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
     DOMAIN,
@@ -38,6 +39,9 @@ def _schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Required(
                 CONF_FLOW_TEMPERATURE, default=defaults.get(CONF_FLOW_TEMPERATURE)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            vol.Optional(
+                CONF_OUTDOOR_TEMPERATURE, default=defaults.get(CONF_OUTDOOR_TEMPERATURE, "")
+            ): str,
             vol.Optional(CONF_MONTHLY_COST, default=defaults.get(CONF_MONTHLY_COST, "")): str,
             vol.Optional(
                 CONF_MONTHLY_COST_BASELINE,
@@ -62,7 +66,7 @@ def _validate(user_input: dict[str, Any]) -> dict[str, str]:
         parse_rooms(user_input.get(CONF_ROOMS, ""))
     except ValueError:
         errors[CONF_ROOMS] = "invalid_rooms"
-    for key in (CONF_MONTHLY_COST, CONF_MONTHLY_COST_BASELINE):
+    for key in (CONF_OUTDOOR_TEMPERATURE, CONF_MONTHLY_COST, CONF_MONTHLY_COST_BASELINE):
         entity_id = user_input.get(key, "").strip()
         if entity_id and not entity_id.startswith(("sensor.", "input_number.")):
             errors[key] = "invalid_sensor"

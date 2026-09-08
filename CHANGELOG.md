@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0
+
+- Each room now gets its own device, so it shows as its own entry (its own
+  "tab") under Settings -> Devices & services instead of one shared device
+  holding every room's entities.
+- Added an optional outdoor temperature sensor setting and a new per-room
+  "Heat demand status" sensor (`learning` / `normal` / `deviating`). It
+  compares a room's live watt-per-degree-of-lift ratio against that same
+  room's own learned baseline, so the comparison is normalised for how cold
+  it is outside rather than a fixed threshold.
+- The status sensor reports `learning` until a room has collected enough
+  hours of valid samples (default 48h) to have a meaningful baseline.
+- Existing installs are unaffected until the optional outdoor sensor is set;
+  without it the new sensor stays unavailable and nothing else changes.
+
 ## 1.2.0
 
 - Added a rated radiator output sensor for every room.

@@ -9,18 +9,20 @@
           "name": "Navn",
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
+          "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "rooms": "Rum"
         },
         "data_description": {
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
           "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
         }
       }
     },
     "error": {
       "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
-      "invalid_sensor": "Den valgfrie prisentitet skal begynde med sensor."
+      "invalid_sensor": "Den valgfrie sensor-entitet skal begynde med sensor."
     },
     "abort": {"already_configured": "Rumenergioptimering er allerede konfigureret."}
   },
@@ -33,18 +35,20 @@
           "name": "Navn",
           "system_type": "Varmeanlæg",
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
+          "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "rooms": "Rum"
         },
         "data_description": {
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
           "rooms": "Navn|climate.entity|nominelle watt|m²|valgfri eksisterende ventiltimer"
         }
       }
     },
     "error": {
       "invalid_rooms": "Brug én gyldig Navn|climate.entity|watt|areal-linje pr. rum.",
-      "invalid_sensor": "Den valgfrie prisentitet skal begynde med sensor."
+      "invalid_sensor": "Den valgfrie sensor-entitet skal begynde med sensor."
     }
   },
   "selector": {
@@ -52,6 +56,17 @@
       "options": {
         "one_pipe": "Et-strengsanlæg",
         "two_pipe": "To-strengsanlæg"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "heat_demand_status": {
+        "state": {
+          "learning": "Lærer baseline",
+          "normal": "Normalt",
+          "deviating": "Uden for normalen"
+        }
       }
     }
   }

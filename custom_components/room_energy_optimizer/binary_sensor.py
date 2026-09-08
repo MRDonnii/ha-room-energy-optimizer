@@ -46,13 +46,12 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
 class RadiatorStressedSensor(OptimizerEntity, BinarySensorEntity):
     """Report a fully open radiator that is still behind its target."""
 
-    _attr_name = None
+    _attr_name = "Radiator stressed"
     _attr_icon = "mdi:radiator-off"
 
     def __init__(self, runtime, room) -> None:
-        super().__init__(runtime, f"{room.slug}_radiator_stressed")
+        super().__init__(runtime, f"{room.slug}_radiator_stressed", room=room)
         self.room = room
-        self._attr_name = f"{room.name} Radiator stressed"
 
     @property
     def available(self) -> bool:

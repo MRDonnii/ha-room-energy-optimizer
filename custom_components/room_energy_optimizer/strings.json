@@ -9,18 +9,20 @@
           "name": "Name",
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "rooms": "Rooms"
         },
         "data_description": {
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
           "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
         }
       }
     },
     "error": {
       "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
-      "invalid_sensor": "The optional cost entity must start with sensor."
+      "invalid_sensor": "The optional sensor entity must start with sensor."
     },
     "abort": {"already_configured": "Room Energy Optimizer is already configured."}
   },
@@ -33,18 +35,20 @@
           "name": "Name",
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "rooms": "Rooms"
         },
         "data_description": {
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
           "rooms": "Name|climate.entity|rated watts|area m²|optional existing valve-hours"
         }
       }
     },
     "error": {
       "invalid_rooms": "Use one valid Name|climate.entity|watts|area line per room.",
-      "invalid_sensor": "The optional cost entity must start with sensor."
+      "invalid_sensor": "The optional sensor entity must start with sensor."
     }
   },
   "selector": {
@@ -52,6 +56,17 @@
       "options": {
         "one_pipe": "One-pipe system",
         "two_pipe": "Two-pipe system"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "heat_demand_status": {
+        "state": {
+          "learning": "Learning baseline",
+          "normal": "Normal",
+          "deviating": "Outside normal range"
+        }
       }
     }
   }
