@@ -27,6 +27,7 @@
           "area_m2": "Rumareal",
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "better_thermostat_extension_enabled": "Aktivér valgfri Better Thermostat-udvidelse",
           "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
           "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
           "stove_on_temperature": "Brændeovn aktiv over",
@@ -35,6 +36,7 @@
         },
         "data_description": {
           "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning.",
+          "better_thermostat_extension_enabled": "Tilføjer ekstern-varme-vagt og åbningskontaktdata. Slået fra påvirker integrationen ikke Better Thermostats læring.",
           "external_heat_entities": "Climate-entiteter tæller kun, mens hvac_action er heating. Binære sensorer tæller, mens de er slået til.",
           "stove_temperature_entity": "Bruger hysterese, så almindelig sensorstøj ikke pauser og genoptager læringen gentagne gange."
         }
@@ -80,6 +82,7 @@
           "area_m2": "Rumareal",
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
+          "better_thermostat_extension_enabled": "Aktivér valgfri Better Thermostat-udvidelse",
           "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
           "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
           "stove_on_temperature": "Brændeovn aktiv over",
@@ -88,6 +91,7 @@
         },
         "data_description": {
           "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning.",
+          "better_thermostat_extension_enabled": "Tilføjer ekstern-varme-vagt og åbningskontaktdata. Slået fra påvirker integrationen ikke Better Thermostats læring.",
           "external_heat_entities": "Climate-entiteter tæller kun, mens hvac_action er heating. Binære sensorer tæller, mens de er slået til.",
           "stove_temperature_entity": "Bruger hysterese, så almindelig sensorstøj ikke pauser og genoptager læringen gentagne gange."
         }
@@ -111,6 +115,7 @@
           "area_m2": "Rumareal",
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned",
+          "better_thermostat_extension_enabled": "Aktivér valgfri Better Thermostat-udvidelse",
           "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
           "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
           "stove_on_temperature": "Brændeovn aktiv over",

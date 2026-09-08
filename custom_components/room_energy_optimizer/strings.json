@@ -27,6 +27,7 @@
           "area_m2": "Room area",
           "radiator_count": "Number of radiators",
           "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
           "external_heat_entities": "Heat pumps or external-heat binary sensors",
           "stove_temperature_entity": "Stove temperature sensor (optional)",
           "stove_on_temperature": "Stove active above",
@@ -35,6 +36,7 @@
         },
         "data_description": {
           "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup.",
+          "better_thermostat_extension_enabled": "Adds external-heat guards and opening-contact data. When disabled, the integration does not affect Better Thermostat learning.",
           "external_heat_entities": "Climate entities count only while hvac_action is heating. Binary sensors count while on.",
           "stove_temperature_entity": "Uses hysteresis so normal sensor noise does not repeatedly pause and resume learning."
         }
@@ -80,6 +82,7 @@
           "area_m2": "Room area",
           "radiator_count": "Number of radiators",
           "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
           "external_heat_entities": "Heat pumps or external-heat binary sensors",
           "stove_temperature_entity": "Stove temperature sensor (optional)",
           "stove_on_temperature": "Stove active above",
@@ -88,6 +91,7 @@
         },
         "data_description": {
           "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup.",
+          "better_thermostat_extension_enabled": "Adds external-heat guards and opening-contact data. When disabled, the integration does not affect Better Thermostat learning.",
           "external_heat_entities": "Climate entities count only while hvac_action is heating. Binary sensors count while on.",
           "stove_temperature_entity": "Uses hysteresis so normal sensor noise does not repeatedly pause and resume learning."
         }
@@ -111,6 +115,7 @@
           "area_m2": "Room area",
           "radiator_count": "Number of radiators",
           "initial_valve_hours": "Existing valve-hours this month",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
           "external_heat_entities": "Heat pumps or external-heat binary sensors",
           "stove_temperature_entity": "Stove temperature sensor (optional)",
           "stove_on_temperature": "Stove active above",

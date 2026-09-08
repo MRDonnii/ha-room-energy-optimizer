@@ -180,6 +180,7 @@ def test_room_external_heat_configuration_round_trip():
             "rated_power_w": 5193,
             "area_m2": 44,
             "radiator_count": 2,
+            "better_thermostat_extension_enabled": True,
             "external_heat_entities": ["climate.heat_pump", "binary_sensor.fireplace"],
             "stove_temperature_entity": "sensor.stove_temperature",
             "stove_on_temperature": 25,
@@ -189,6 +190,35 @@ def test_room_external_heat_configuration_round_trip():
     )
     restored = model.rooms_from_options([model.room_to_dict(room)])[0]
     assert restored == room
+
+
+def test_better_thermostat_extension_is_optional_and_defaults_off():
+    room = model.rooms_from_options(
+        [
+            {
+                "name": "Office",
+                "climate_entity": "climate.office",
+                "rated_power_w": 1000,
+                "area_m2": 12,
+            }
+        ]
+    )[0]
+    assert room.better_thermostat_extension_enabled is False
+
+
+def test_legacy_external_heat_configuration_enables_extension():
+    room = model.rooms_from_options(
+        [
+            {
+                "name": "Living room",
+                "climate_entity": "climate.living_room",
+                "rated_power_w": 2000,
+                "area_m2": 30,
+                "external_heat_entities": ["climate.heat_pump"],
+            }
+        ]
+    )[0]
+    assert room.better_thermostat_extension_enabled is True
 
 
 def test_room_rejects_invalid_stove_hysteresis():

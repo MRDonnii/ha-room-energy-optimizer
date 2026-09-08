@@ -53,9 +53,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                 RoomSensor(
                     runtime, room, "area", "Room area", UnitOfArea.SQUARE_METERS, "mdi:set-square"
                 ),
-                RoomSensor(
-                    runtime, room, "radiator_count", "Radiator count", None, "mdi:radiator"
-                ),
+                RoomSensor(runtime, room, "radiator_count", "Radiator count", None, "mdi:radiator"),
                 RoomSensor(
                     runtime,
                     room,
