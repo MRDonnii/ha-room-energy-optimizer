@@ -335,7 +335,8 @@ class OptionsFlow(config_entries.OptionsFlow, RoomWizardSteps):
                     room_to_dict(updated) if room["name"] == self._editing_room_name else room
                     for room in self._rooms
                 ]
-                return await self.async_step_manage_rooms()
+                options = {**self._data, CONF_ROOMS: self._rooms}
+                return self.async_create_entry(title="", data=options)
         return self.async_show_form(
             step_id="edit_room",
             data_schema=_room_schema(current, adding=False),

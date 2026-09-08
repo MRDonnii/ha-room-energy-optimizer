@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2
+
+- Save immediately after editing one room. This makes each edit atomic and
+  gives API clients the same reliable flow as the Home Assistant GUI.
+
 ## 1.5.1
 
 - Added in-place room editing to the options GUI, including all external-heat
