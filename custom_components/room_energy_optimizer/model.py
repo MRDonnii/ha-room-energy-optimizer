@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -66,6 +67,11 @@ def parse_rooms(raw: str) -> list[RoomConfig]:
 def valve_percentage(attributes: dict[str, Any]) -> float | None:
     """Read Better Thermostat calibration_balance without modifying it."""
     balance = attributes.get("calibration_balance")
+    if isinstance(balance, str):
+        try:
+            balance = json.loads(balance)
+        except (TypeError, ValueError):
+            return None
     if not isinstance(balance, dict) or not balance:
         return None
     values: list[float] = []

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 — 2026-09-08
+
+- Accept Better Thermostat `calibration_balance` as either JSON text or an object.
+
 ## 1.1.0 — 2026-09-08
 
 - Added optional migration seeds for existing month-to-date valve-hours.

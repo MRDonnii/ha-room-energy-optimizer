@@ -47,6 +47,13 @@ def test_valve_percentage_missing_is_not_zero():
     assert model.valve_percentage({}) is None
 
 
+def test_valve_percentage_accepts_json_attribute():
+    attributes = {
+        "calibration_balance": ('{"climate.one":{"valve%":20},"climate.two":{"valve%":60}}')
+    }
+    assert model.valve_percentage(attributes) == 40
+
+
 def test_one_pipe_reference_power():
     value = model.estimated_power(1000, 50, 70, 20, True)
     assert value is not None
