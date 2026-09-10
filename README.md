@@ -52,7 +52,9 @@ power/area value.
 
 ## Better Thermostat, external heat and opening contacts
 
-For each room you can optionally select heat-pump climate entities, external-
+The Better Thermostat extension is explicitly optional and disabled by default
+for new rooms. The energy, valve-hours and cost features work without it.
+When enabled for a room, you can optionally select heat-pump climate entities, external-
 heat binary sensors, and a stove temperature sensor with separate on/off
 thresholds. Climate sources count only while `hvac_action` is `heating`; the
 stove thresholds use hysteresis.

@@ -22,6 +22,7 @@ class RoomConfig:
     area_m2: float
     radiator_count: int = 1
     initial_valve_hours: float = 0.0
+    better_thermostat_extension_enabled: bool = False
     external_heat_entities: tuple[str, ...] = ()
     stove_temperature_entity: str = ""
     stove_on_temperature: float = 25.0
@@ -78,6 +79,7 @@ def room_to_dict(room: RoomConfig) -> dict[str, Any]:
         "area_m2": room.area_m2,
         "radiator_count": room.radiator_count,
         "initial_valve_hours": room.initial_valve_hours,
+        "better_thermostat_extension_enabled": room.better_thermostat_extension_enabled,
         "external_heat_entities": list(room.external_heat_entities),
         "stove_temperature_entity": room.stove_temperature_entity,
         "stove_on_temperature": room.stove_on_temperature,
@@ -113,6 +115,12 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
         if str(entity_id).startswith(("binary_sensor.", "climate."))
     )
     stove_entity = str(data.get("stove_temperature_entity", "") or "")
+    extension_enabled = bool(
+        data.get(
+            "better_thermostat_extension_enabled",
+            bool(external_heat_entities or stove_entity),
+        )
+    )
     if stove_entity and not stove_entity.startswith("sensor."):
         raise ValueError("stove temperature entity must be a sensor")
     if stove_off >= stove_on:
@@ -125,6 +133,7 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
         area,
         radiator_count,
         initial_hours,
+        extension_enabled,
         external_heat_entities,
         stove_entity,
         stove_on,

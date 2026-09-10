@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0
+
+- Made the Better Thermostat extension an explicit per-room opt-in switch.
+- New rooms default to the standalone energy features only.
+- Existing rooms with external-heat sources are migrated as enabled.
+- Guard and opening-contact entities are only created for opted-in rooms.
+
 ## 1.5.3
 
 - Fixed the optional stove entity selector so rooms without a stove can be

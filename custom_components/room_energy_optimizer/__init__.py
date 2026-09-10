@@ -52,9 +52,7 @@ class RuntimeData:
         self.ratio_recent: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.ratio_baseline: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.baseline_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
-        self.external_heat_active: dict[str, bool | None] = {
-            room.slug: None for room in self.rooms
-        }
+        self.external_heat_active: dict[str, bool | None] = {room.slug: None for room in self.rooms}
         self.external_heat_sources: dict[str, list[str]] = {room.slug: [] for room in self.rooms}
         self.contact_open: dict[str, bool] = {room.slug: False for room in self.rooms}
         self._stove_active: dict[str, bool] = {room.slug: False for room in self.rooms}
@@ -144,6 +142,8 @@ class RuntimeData:
 
     def _read_external_heat(self, room: RoomConfig) -> tuple[bool | None, list[str]]:
         """Return external-heat state and the sources currently producing heat."""
+        if not room.better_thermostat_extension_enabled:
+            return False, []
         active_sources: list[str] = []
         valid = True
         for entity_id in room.external_heat_entities:
@@ -192,7 +192,8 @@ class RuntimeData:
             self.external_heat_active[room.slug] = external_heat
             self.external_heat_sources[room.slug] = sources
             self.contact_open[room.slug] = bool(
-                state
+                room.better_thermostat_extension_enabled
+                and state
                 and (
                     state.attributes.get("window_open", False)
                     or state.attributes.get("door_open", False)
