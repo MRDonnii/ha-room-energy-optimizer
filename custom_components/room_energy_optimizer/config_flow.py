@@ -75,82 +75,82 @@ def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True)
         return vol.Required(key) if value is vol.UNDEFINED else vol.Required(key, default=value)
 
     fields: dict[Any, Any] = {
-            required("name"): str,
-            required("climate_entity"): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="climate")
-            ),
-            required("rated_power_w"): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1,
-                    max=20000,
-                    step=1,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="W",
-                )
-            ),
-            required("area_m2"): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0.5,
-                    max=500,
-                    step=0.1,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="m²",
-                )
-            ),
-            required("radiator_count", 1): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1, max=20, step=1, mode=selector.NumberSelectorMode.BOX
-                )
-            ),
+        required("name"): str,
+        required("climate_entity"): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="climate")
+        ),
+        required("rated_power_w"): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=1,
+                max=20000,
+                step=1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="W",
+            )
+        ),
+        required("area_m2"): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.5,
+                max=500,
+                step=0.1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="m²",
+            )
+        ),
+        required("radiator_count", 1): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=1, max=20, step=1, mode=selector.NumberSelectorMode.BOX
+            )
+        ),
+        vol.Optional(
+            "initial_valve_hours", default=defaults.get("initial_valve_hours", 0)
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                step=0.01,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="h",
+            )
+        ),
+        vol.Required(
+            "better_thermostat_extension_enabled",
+            default=defaults.get("better_thermostat_extension_enabled", False),
+        ): selector.BooleanSelector(),
+        vol.Optional(
+            "external_heat_entities", default=defaults.get("external_heat_entities", [])
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["binary_sensor", "climate"], multiple=True)
+        ),
+        (
             vol.Optional(
-                "initial_valve_hours", default=defaults.get("initial_valve_hours", 0)
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    step=0.01,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="h",
-                )
-            ),
-            vol.Optional(
-                "external_heat_entities", default=defaults.get("external_heat_entities", [])
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    domain=["binary_sensor", "climate"], multiple=True
-                )
-            ),
-            (
-                vol.Optional(
-                    "stove_temperature_entity",
-                    default=defaults["stove_temperature_entity"],
-                )
-                if defaults.get("stove_temperature_entity")
-                else vol.Optional("stove_temperature_entity")
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
-            ),
-            vol.Optional(
-                "stove_on_temperature", default=defaults.get("stove_on_temperature", 25)
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=100,
-                    step=0.1,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="°C",
-                )
-            ),
-            vol.Optional(
-                "stove_off_temperature", default=defaults.get("stove_off_temperature", 24)
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=100,
-                    step=0.1,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="°C",
-                )
-            ),
+                "stove_temperature_entity",
+                default=defaults["stove_temperature_entity"],
+            )
+            if defaults.get("stove_temperature_entity")
+            else vol.Optional("stove_temperature_entity")
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        vol.Optional(
+            "stove_on_temperature", default=defaults.get("stove_on_temperature", 25)
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=100,
+                step=0.1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="°C",
+            )
+        ),
+        vol.Optional(
+            "stove_off_temperature", default=defaults.get("stove_off_temperature", 24)
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=100,
+                step=0.1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="°C",
+            )
+        ),
     }
     if adding:
         fields[vol.Required("add_another_room", default=True)] = selector.BooleanSelector()
@@ -193,9 +193,7 @@ class RoomWizardSteps:
         )
 
 
-class RoomEnergyOptimizerConfigFlow(
-    config_entries.ConfigFlow, RoomWizardSteps, domain=DOMAIN
-):
+class RoomEnergyOptimizerConfigFlow(config_entries.ConfigFlow, RoomWizardSteps, domain=DOMAIN):
     """Set up the integration: settings once, then rooms one at a time."""
 
     VERSION = 1

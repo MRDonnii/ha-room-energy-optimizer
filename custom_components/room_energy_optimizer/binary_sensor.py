@@ -12,8 +12,16 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
         [
             DataHealthSensor(runtime),
             *(RadiatorStressedSensor(runtime, room) for room in runtime.rooms),
-            *(ExternalHeatSensor(runtime, room) for room in runtime.rooms),
-            *(OpeningContactSensor(runtime, room) for room in runtime.rooms),
+            *(
+                ExternalHeatSensor(runtime, room)
+                for room in runtime.rooms
+                if room.better_thermostat_extension_enabled
+            ),
+            *(
+                OpeningContactSensor(runtime, room)
+                for room in runtime.rooms
+                if room.better_thermostat_extension_enabled
+            ),
         ]
     )
 
@@ -31,8 +39,7 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
         unsupported_guards = [
             room
             for room in self.runtime.rooms
-            if (room.external_heat_entities or room.stove_temperature_entity)
-            and not self._bt_guard_supported(room)
+            if room.better_thermostat_extension_enabled and not self._bt_guard_supported(room)
         ]
         return (
             flow is None
@@ -62,8 +69,7 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
             "better_thermostat_guard_unsupported": [
                 room.climate_entity
                 for room in self.runtime.rooms
-                if (room.external_heat_entities or room.stove_temperature_entity)
-                and not self._bt_guard_supported(room)
+                if room.better_thermostat_extension_enabled and not self._bt_guard_supported(room)
             ],
         }
 
