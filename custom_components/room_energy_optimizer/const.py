@@ -2,7 +2,7 @@
 
 DOMAIN = "room_energy_optimizer"
 PLATFORMS = ["sensor", "binary_sensor"]
-VERSION = "1.8.0"
+VERSION = "1.8.1"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"
@@ -30,6 +30,7 @@ DEFAULT_LOOP_DROP_PER_STATION = 2.0
 
 SYSTEM_ONE_PIPE = "one_pipe"
 SYSTEM_TWO_PIPE = "two_pipe"
+SYSTEM_INHERIT = "inherit"
 DEFAULT_SCAN_INTERVAL = 60
 
 # Weather-normalised heat-demand baseline (see model.classify_heat_demand).

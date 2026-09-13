@@ -143,6 +143,20 @@ def test_room_from_dict_wizard_submission():
     assert room.initial_valve_hours == 0.0
 
 
+def test_room_from_dict_normalises_inherit_system_type():
+    room = model.room_from_dict(
+        {
+            "name": "Stue",
+            "climate_entity": "climate.stue",
+            "rated_power_w": 1000,
+            "area_m2": 20,
+            "system_type_override": "inherit",
+        },
+        existing_slugs=set(),
+    )
+    assert room.system_type_override == ""
+
+
 def test_room_from_dict_rejects_duplicate_slug():
     try:
         model.room_from_dict(

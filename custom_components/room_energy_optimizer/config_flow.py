@@ -28,6 +28,7 @@ from .const import (
     CONF_SYSTEM_TYPE,
     DEFAULT_LOOP_DROP_PER_STATION,
     DOMAIN,
+    SYSTEM_INHERIT,
     SYSTEM_ONE_PIPE,
     SYSTEM_TWO_PIPE,
 )
@@ -136,10 +137,11 @@ def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True)
             default=defaults.get("better_thermostat_extension_enabled", False),
         ): selector.BooleanSelector(),
         vol.Optional(
-            CONF_ROOM_SYSTEM_TYPE, default=defaults.get(CONF_ROOM_SYSTEM_TYPE, "")
+            CONF_ROOM_SYSTEM_TYPE,
+            default=defaults.get(CONF_ROOM_SYSTEM_TYPE, "") or SYSTEM_INHERIT,
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
-                options=["", SYSTEM_ONE_PIPE, SYSTEM_TWO_PIPE],
+                options=[SYSTEM_INHERIT, SYSTEM_ONE_PIPE, SYSTEM_TWO_PIPE],
                 translation_key=CONF_ROOM_SYSTEM_TYPE,
                 mode=selector.SelectSelectorMode.DROPDOWN,
             )

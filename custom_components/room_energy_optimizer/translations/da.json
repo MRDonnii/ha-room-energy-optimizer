@@ -148,7 +148,7 @@
     },
     "system_type_override": {
       "options": {
-        "": "Som husets anlæg",
+        "inherit": "Som husets anlæg",
         "one_pipe": "Et-strengsanlæg",
         "two_pipe": "To-strengsanlæg"
       }
