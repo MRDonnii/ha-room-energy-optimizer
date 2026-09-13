@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfArea, UnitOfPower
+from homeassistant.helpers.entity import EntityCategory
 
 from .const import (
     CONF_FLOW_TEMPERATURE,
@@ -12,12 +13,14 @@ from .const import (
     CONF_OUTDOOR_TEMPERATURE,
     CONF_SYSTEM_TYPE,
     DOMAIN,
-    HEAT_DEMAND_DEVIATION_THRESHOLD,
+    HEAT_DEMAND_DEVIATION_ENTER_THRESHOLD,
+    HEAT_DEMAND_DEVIATION_EXIT_THRESHOLD,
     HEAT_DEMAND_MIN_BASELINE_HOURS,
+    HEAT_DEMAND_MIN_RECENT_HOURS,
     SYSTEM_ONE_PIPE,
 )
 from .entity import OptimizerEntity
-from .model import classify_heat_demand, estimated_power
+from .model import classify_heat_demand, estimated_power, room_loop_positions, room_one_pipe
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
@@ -73,6 +76,8 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                 HeatDemandStatusSensor(runtime, room),
             ]
         )
+        if room_loop_positions(room.slug, runtime.loop_stops):
+            entities.append(ExperimentalCascadePowerSensor(runtime, room))
     entities.append(TotalPowerSensor(runtime))
     async_add_entities(entities)
 
@@ -106,12 +111,13 @@ class RoomSensor(OptimizerEntity, SensorEntity):
             flow_temp = float(flow.state) if flow is not None else None
         except (KeyError, TypeError, ValueError):
             return None
+        global_system_type = self.runtime.entry.options.get(CONF_SYSTEM_TYPE, SYSTEM_ONE_PIPE)
         return estimated_power(
             self.room.rated_power_w,
             valve,
             flow_temp,
             room_temp,
-            self.runtime.entry.options[CONF_SYSTEM_TYPE] == SYSTEM_ONE_PIPE,
+            room_one_pipe(self.room, global_system_type),
         )
 
     @property
@@ -168,6 +174,64 @@ class RoomSensor(OptimizerEntity, SensorEntity):
         return self.room.area_m2
 
 
+class ExperimentalCascadePowerSensor(OptimizerEntity, SensorEntity):
+    """EXPERIMENTAL: estimated heat output using an assumed one-pipe cascade.
+
+    Unlike the main "Estimated heat output" sensor (which applies a flat
+    correction for the whole room regardless of loop position), this adjusts
+    the flow temperature per this room's configured loop_order position(s),
+    using an assumed, uncalibrated temperature drop per stop
+    (loop_drop_per_station_c). Nothing here is measured - it exists so a
+    room's number can be sanity-checked once real per-radiator temperatures
+    are available, not to be trusted as-is. Diagnostic category, and named
+    accordingly, so it never gets mistaken for the primary estimate.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:flask-outline"
+
+    def __init__(self, runtime, room) -> None:
+        super().__init__(runtime, f"{room.slug}_experimental_cascade_power", room=room)
+        self.room = room
+        self._attr_name = "Estimated heat output (experimental cascade)"
+
+    @property
+    def available(self) -> bool:
+        return self.runtime.valves[self.room.slug] is not None
+
+    def _cascade_power(self):
+        climate = self.hass.states.get(self.room.climate_entity)
+        valve = self.runtime.valves[self.room.slug]
+        flow_temp = self.runtime.experimental_cascade_flow_temperature(self.room)
+        if climate is None or valve is None or flow_temp is None:
+            return None
+        try:
+            room_temp = float(climate.attributes["current_temperature"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return estimated_power(self.room.rated_power_w, valve, flow_temp, room_temp, False)
+
+    @property
+    def native_value(self):
+        power = self._cascade_power()
+        return None if power is None else round(power)
+
+    @property
+    def extra_state_attributes(self):
+        positions = room_loop_positions(self.room.slug, self.runtime.loop_stops)
+        return {
+            "loop_positions": positions,
+            "assumed_drop_per_station_c": self.runtime.loop_drop_per_station_c,
+            "assumed_flow_temperature_c": self.runtime.experimental_cascade_flow_temperature(
+                self.room
+            ),
+            "calibrated": False,
+        }
+
+
 class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
     """Whether a room's weather-normalised heat demand looks normal.
 
@@ -186,6 +250,7 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
         super().__init__(runtime, f"{room.slug}_heat_demand_status", room=room)
         self.room = room
         self._attr_name = "Heat demand status"
+        self._last_status = "learning"
 
     @property
     def available(self) -> bool:
@@ -193,13 +258,19 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return classify_heat_demand(
+        status = classify_heat_demand(
             self.runtime.ratio_recent[self.room.slug],
             self.runtime.ratio_baseline[self.room.slug],
             self.runtime.baseline_hours[self.room.slug],
             HEAT_DEMAND_MIN_BASELINE_HOURS,
-            HEAT_DEMAND_DEVIATION_THRESHOLD,
+            HEAT_DEMAND_DEVIATION_ENTER_THRESHOLD,
+            self.runtime.recent_hours[self.room.slug],
+            HEAT_DEMAND_MIN_RECENT_HOURS,
+            HEAT_DEMAND_DEVIATION_EXIT_THRESHOLD,
+            self._last_status,
         )
+        self._last_status = status
+        return status
 
     @property
     def extra_state_attributes(self):
@@ -213,6 +284,9 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
             "learned_baseline_w_per_degree": None if baseline is None else round(baseline, 2),
             "deviation_percent": deviation_percent,
             "baseline_learning_hours": round(self.runtime.baseline_hours[self.room.slug], 1),
+            "recent_observation_hours": round(self.runtime.recent_hours[self.room.slug], 1),
+            "recent_ready": self.runtime.recent_hours[self.room.slug]
+            >= HEAT_DEMAND_MIN_RECENT_HOURS,
             "baseline_ready": self.runtime.baseline_hours[self.room.slug]
             >= HEAT_DEMAND_MIN_BASELINE_HOURS,
         }
@@ -231,6 +305,7 @@ class TotalPowerSensor(OptimizerEntity, SensorEntity):
     @property
     def native_value(self):
         values = []
+        global_system_type = self.runtime.entry.options.get(CONF_SYSTEM_TYPE, SYSTEM_ONE_PIPE)
         for room in self.runtime.rooms:
             climate = self.hass.states.get(room.climate_entity)
             flow = self.hass.states.get(self.runtime.entry.options[CONF_FLOW_TEMPERATURE])
@@ -241,7 +316,7 @@ class TotalPowerSensor(OptimizerEntity, SensorEntity):
                     valve,
                     float(flow.state),
                     float(climate.attributes["current_temperature"]),
-                    self.runtime.entry.options[CONF_SYSTEM_TYPE] == SYSTEM_ONE_PIPE,
+                    room_one_pipe(room, global_system_type),
                 )
             except (AttributeError, KeyError, TypeError, ValueError):
                 value = None

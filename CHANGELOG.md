@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0
+
+- Stabilise heat-demand diagnostics with a six-hour recent EMA instead of 30 minutes.
+- Ignore closed/idle radiator samples so zero output is not reported as poor consumption.
+- Require six active observation hours and use 50%/30% hysteresis before changing status.
+- Migrate away from the old idle-polluted derived baseline without resetting room setup or valve-hours.
+
+## 1.7.0
+
+- Add per-room one-pipe/two-pipe overrides for mixed heating installations.
+- Add experimental one-pipe loop-order and cascade-output diagnostics.
+
 ## 1.6.0
 
 - Made the Better Thermostat extension an explicit per-room opt-in switch.

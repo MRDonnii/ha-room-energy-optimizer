@@ -11,10 +11,14 @@
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
-          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)"
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
+          "loop_order": "One-pipe loop order (optional)",
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room."
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
+          "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
         }
       },
       "add_room": {
@@ -59,10 +63,14 @@
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
-          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)"
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
+          "loop_order": "One-pipe loop order (optional)",
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room."
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
+          "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
         }
       },
       "manage_rooms": {
@@ -83,6 +91,7 @@
           "radiator_count": "Number of radiators",
           "initial_valve_hours": "Existing valve-hours this month (migration only)",
           "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
+          "system_type_override": "Heating system override (optional)",
           "external_heat_entities": "Heat pumps or external-heat binary sensors",
           "stove_temperature_entity": "Stove temperature sensor (optional)",
           "stove_on_temperature": "Stove active above",
@@ -92,6 +101,7 @@
         "data_description": {
           "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup.",
           "better_thermostat_extension_enabled": "Adds external-heat guards and opening-contact data. When disabled, the integration does not affect Better Thermostat learning.",
+          "system_type_override": "Use this when the room is on its own dedicated branch that differs from the house-wide heating system (e.g. a two-pipe garage or kitchen loop off an otherwise one-pipe house). Leave on the default to inherit the house-wide setting.",
           "external_heat_entities": "Climate entities count only while hvac_action is heating. Binary sensors count while on.",
           "stove_temperature_entity": "Uses hysteresis so normal sensor noise does not repeatedly pause and resume learning."
         }
@@ -116,6 +126,7 @@
           "radiator_count": "Number of radiators",
           "initial_valve_hours": "Existing valve-hours this month",
           "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
+          "system_type_override": "Heating system override (optional)",
           "external_heat_entities": "Heat pumps or external-heat binary sensors",
           "stove_temperature_entity": "Stove temperature sensor (optional)",
           "stove_on_temperature": "Stove active above",
@@ -131,6 +142,13 @@
   "selector": {
     "system_type": {
       "options": {
+        "one_pipe": "One-pipe system",
+        "two_pipe": "Two-pipe system"
+      }
+    },
+    "system_type_override": {
+      "options": {
+        "": "Same as house-wide setting",
         "one_pipe": "One-pipe system",
         "two_pipe": "Two-pipe system"
       }

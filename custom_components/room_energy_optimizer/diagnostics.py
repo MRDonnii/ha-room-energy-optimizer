@@ -8,6 +8,7 @@ async def async_get_config_entry_diagnostics(hass, entry):
     return {
         "version": VERSION,
         "system_type": entry.options.get("system_type"),
+        "loop_order": entry.options.get("loop_order"),
         "outdoor_temperature_configured": bool(entry.options.get("outdoor_temperature_entity")),
         "room_count": len(runtime.rooms),
         "rooms": [
@@ -15,8 +16,10 @@ async def async_get_config_entry_diagnostics(hass, entry):
                 "slug": room.slug,
                 "rated_power_w": room.rated_power_w,
                 "area_m2": room.area_m2,
+                "system_type_override": room.system_type_override or None,
                 "valve_data_available": runtime.valves[room.slug] is not None,
                 "heat_demand_baseline_hours": round(runtime.baseline_hours[room.slug], 1),
+                "heat_demand_recent_hours": round(runtime.recent_hours[room.slug], 1),
             }
             for room in runtime.rooms
         ],

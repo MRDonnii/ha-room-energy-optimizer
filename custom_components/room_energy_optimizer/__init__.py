@@ -13,21 +13,31 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_FLOW_TEMPERATURE,
+    CONF_LOOP_DROP_PER_STATION,
+    CONF_LOOP_ORDER,
     CONF_OUTDOOR_TEMPERATURE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
+    DEFAULT_LOOP_DROP_PER_STATION,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     HEAT_DEMAND_BASELINE_HALF_LIFE_HOURS,
     HEAT_DEMAND_MIN_DELTA,
+    HEAT_DEMAND_MIN_POWER_W,
+    HEAT_DEMAND_MIN_VALVE_PERCENT,
+    HEAT_DEMAND_MODEL_VERSION,
     HEAT_DEMAND_RECENT_HALF_LIFE_HOURS,
     PLATFORMS,
     SYSTEM_ONE_PIPE,
 )
 from .model import (
     RoomConfig,
+    cascade_flow_temperature,
     estimated_power,
     heat_demand_ratio,
+    parse_loop_order,
+    room_loop_positions,
+    room_one_pipe,
     room_to_dict,
     rooms_from_options,
     update_ema,
@@ -42,6 +52,12 @@ class RuntimeData:
         self.hass = hass
         self.entry = entry
         self.rooms: list[RoomConfig] = rooms_from_options(entry.options.get(CONF_ROOMS, []))
+        # EXPERIMENTAL one-pipe cascade estimate - see model.cascade_flow_temperature.
+        self.loop_stops = parse_loop_order(entry.options.get(CONF_LOOP_ORDER, "") or "")
+        self.loop_drop_per_station_c = float(
+            entry.options.get(CONF_LOOP_DROP_PER_STATION, DEFAULT_LOOP_DROP_PER_STATION)
+            or DEFAULT_LOOP_DROP_PER_STATION
+        )
         self.valves: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.hours: dict[str, float] = {room.slug: room.initial_valve_hours for room in self.rooms}
         # Weather-normalised heat-demand baseline (W per °C of indoor/outdoor
@@ -50,6 +66,7 @@ class RuntimeData:
         # `baseline_hours` counts how many hours of valid samples fed it.
         # Unlike `hours`, these never reset on a month boundary.
         self.ratio_recent: dict[str, float | None] = {room.slug: None for room in self.rooms}
+        self.recent_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
         self.ratio_baseline: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.baseline_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
         self.external_heat_active: dict[str, bool | None] = {room.slug: None for room in self.rooms}
@@ -72,12 +89,23 @@ class RuntimeData:
                     if key in self.hours
                 }
             )
-        for slug, data in stored.get("baseline", {}).items():
+        # Model v1 included closed radiators as zero-demand samples. Those
+        # derived baselines are intentionally discarded once; configuration,
+        # valve-hours and all other persisted data remain untouched.
+        demand_data = (
+            stored
+            if stored.get("heat_demand_model_version") == HEAT_DEMAND_MODEL_VERSION
+            else {}
+        )
+        for slug, data in demand_data.get("baseline", {}).items():
             if slug not in self.ratio_baseline or not isinstance(data, dict):
                 continue
             ratio = data.get("ratio")
             self.ratio_baseline[slug] = None if ratio is None else float(ratio)
             self.baseline_hours[slug] = float(data.get("hours", 0.0))
+            recent = data.get("recent_ratio")
+            self.ratio_recent[slug] = None if recent is None else float(recent)
+            self.recent_hours[slug] = float(data.get("recent_hours", 0.0))
         await self.async_update()
         from datetime import timedelta
 
@@ -107,6 +135,17 @@ class RuntimeData:
         except (TypeError, ValueError):
             return None
 
+    def experimental_cascade_flow_temperature(self, room: RoomConfig) -> float | None:
+        """EXPERIMENTAL: this room's assumed local flow temperature on the
+        one-pipe loop. None when the room has no configured loop position
+        (e.g. a dedicated two-pipe branch, or the loop order is unset).
+        """
+        positions = room_loop_positions(room.slug, self.loop_stops)
+        flow_temperature = self._flow_temperature()
+        if not positions or flow_temperature is None:
+            return None
+        return cascade_flow_temperature(flow_temperature, positions, self.loop_drop_per_station_c)
+
     def _update_heat_demand_baseline(
         self, room: RoomConfig, valve: float | None, elapsed_hours: float
     ) -> None:
@@ -122,9 +161,15 @@ class RuntimeData:
             target_temp = float(state.attributes["temperature"])
         except (KeyError, TypeError, ValueError):
             return
-        one_pipe = self.entry.options.get(CONF_SYSTEM_TYPE) == SYSTEM_ONE_PIPE
+        global_system_type = self.entry.options.get(CONF_SYSTEM_TYPE, SYSTEM_ONE_PIPE)
+        one_pipe = room_one_pipe(room, global_system_type)
         power = estimated_power(room.rated_power_w, valve, flow_temp, room_temp, one_pipe)
-        if power is None:
+        if (
+            power is None
+            or valve < HEAT_DEMAND_MIN_VALVE_PERCENT
+            or power < HEAT_DEMAND_MIN_POWER_W
+            or elapsed_hours <= 0
+        ):
             return
         ratio = heat_demand_ratio(power, target_temp, outdoor_temp, HEAT_DEMAND_MIN_DELTA)
         if ratio is None:
@@ -132,6 +177,7 @@ class RuntimeData:
         self.ratio_recent[room.slug] = update_ema(
             self.ratio_recent[room.slug], ratio, elapsed_hours, HEAT_DEMAND_RECENT_HALF_LIFE_HOURS
         )
+        self.recent_hours[room.slug] += elapsed_hours
         self.ratio_baseline[room.slug] = update_ema(
             self.ratio_baseline[room.slug],
             ratio,
@@ -212,12 +258,15 @@ class RuntimeData:
 
     def _data_to_save(self) -> dict[str, Any]:
         return {
+            "heat_demand_model_version": HEAT_DEMAND_MODEL_VERSION,
             "month": self._month,
             "hours": self.hours,
             "baseline": {
                 room.slug: {
                     "ratio": self.ratio_baseline[room.slug],
                     "hours": self.baseline_hours[room.slug],
+                    "recent_ratio": self.ratio_recent[room.slug],
+                    "recent_hours": self.recent_hours[room.slug],
                 }
                 for room in self.rooms
             },
