@@ -1,5 +1,11 @@
 # Room Energy Optimizer
 
+Heat-demand status is deliberately slow and diagnostic: it compares a six-hour
+weather-normalised active-heating average with at least 48 active heating hours
+of learned history. Closed radiators are ignored, and hysteresis prevents rapid
+switching around the warning threshold. After upgrading to 1.8.0 the derived
+baseline relearns once because older versions included idle samples.
+
 Room Energy Optimizer turns existing Home Assistant climate and temperature
 data into understandable room-by-room heating estimates. It is designed for
 hydronic radiator systems, including one-pipe installations where a shared
@@ -11,7 +17,7 @@ equipment. It reads Better Thermostat's public attributes and can optionally
 publish an external-heat learning guard. A cold room can therefore keep
 receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.5.3**
+**Current version: 1.8.0**
 
 ## What it provides
 

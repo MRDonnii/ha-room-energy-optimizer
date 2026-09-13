@@ -27,6 +27,10 @@ class RoomConfig:
     stove_temperature_entity: str = ""
     stove_on_temperature: float = 25.0
     stove_off_temperature: float = 24.0
+    # "" = inherit the house-wide system_type; "one_pipe"/"two_pipe" overrides it
+    # for a room on its own dedicated branch (e.g. a two-pipe garage circuit
+    # off an otherwise one-pipe house).
+    system_type_override: str = ""
 
 
 def slugify(value: str) -> str:
@@ -84,6 +88,7 @@ def room_to_dict(room: RoomConfig) -> dict[str, Any]:
         "stove_temperature_entity": room.stove_temperature_entity,
         "stove_on_temperature": room.stove_on_temperature,
         "stove_off_temperature": room.stove_off_temperature,
+        "system_type_override": room.system_type_override,
     }
 
 
@@ -125,6 +130,9 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
         raise ValueError("stove temperature entity must be a sensor")
     if stove_off >= stove_on:
         raise ValueError("stove off temperature must be below on temperature")
+    system_type_override = str(data.get("system_type_override", "") or "")
+    if system_type_override not in ("", "one_pipe", "two_pipe"):
+        raise ValueError("system type override must be one_pipe or two_pipe")
     return RoomConfig(
         name,
         slug,
@@ -138,6 +146,7 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
         stove_entity,
         stove_on,
         stove_off,
+        system_type_override,
     )
 
 
@@ -159,6 +168,60 @@ def rooms_from_options(raw: list[dict[str, Any]] | str) -> list[RoomConfig]:
     if not rooms:
         raise ValueError("at least one room is required")
     return rooms
+
+
+def room_one_pipe(room: "RoomConfig", global_system_type: str) -> bool:
+    """Resolve whether one room's estimate should use the one-pipe formula.
+
+    A room's own `system_type_override` wins when set (e.g. Garage/Køkken on
+    a dedicated two-pipe branch off an otherwise one-pipe house); otherwise
+    it falls back to the house-wide system_type.
+    """
+    return (room.system_type_override or global_system_type) == "one_pipe"
+
+
+def parse_loop_order(raw: str) -> list[tuple[str, str]]:
+    """Parse the free-text one-pipe loop order into (label, room_slug) stops.
+
+    One stop per physical point in the loop, in flow order: `label` on its
+    own for an unmetered stop (e.g. a floor-heating loop with no climate
+    entity), or `label|room_slug` to link a stop to a configured room. A
+    room with several radiators on the loop (e.g. two thermostats grouped
+    under one climate entity) gets one line per radiator, all pointing at
+    the same slug. Blank lines and '#' comments are ignored.
+    """
+    stops: list[tuple[str, str]] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            label, slug = (part.strip() for part in line.split("|", 1))
+        else:
+            label, slug = line, ""
+        stops.append((label, slug))
+    return stops
+
+
+def room_loop_positions(room_slug: str, stops: list[tuple[str, str]]) -> list[int]:
+    """1-based flow positions of a room's radiator(s) in the parsed loop order."""
+    return [index for index, (_, slug) in enumerate(stops, 1) if slug == room_slug]
+
+
+def cascade_flow_temperature(
+    flow_temperature: float, positions: list[int], drop_per_station_c: float
+) -> float | None:
+    """EXPERIMENTAL: estimate the flow temperature reaching a room's own
+    radiator(s) on a one-pipe loop, assuming a flat temperature drop at
+    each preceding stop. This is not calibrated against any measured
+    per-radiator temperature - it is a rough, assumed decay rate applied
+    to the loop position the room was told to be at. Treat any sensor
+    built on this as an indication to sanity-check, not a trusted figure.
+    """
+    if not positions:
+        return None
+    average_position = sum(positions) / len(positions)
+    return flow_temperature - drop_per_station_c * (average_position - 1)
 
 
 def valve_percentage(attributes: dict[str, Any]) -> float | None:
@@ -252,7 +315,11 @@ def classify_heat_demand(
     baseline_ratio: float | None,
     baseline_hours: float,
     min_baseline_hours: float,
-    deviation_threshold: float,
+    deviation_enter_threshold: float,
+    recent_hours: float = 0.0,
+    min_recent_hours: float = 0.0,
+    deviation_exit_threshold: float | None = None,
+    previous_status: str = "learning",
 ) -> str:
     """Classify a room's current weather-normalised heat demand.
 
@@ -265,7 +332,17 @@ def classify_heat_demand(
         or baseline_ratio is None
         or baseline_ratio <= 0
         or baseline_hours < min_baseline_hours
+        or recent_hours < min_recent_hours
     ):
         return "learning"
     deviation = abs(recent_ratio - baseline_ratio) / baseline_ratio
-    return "deviating" if deviation > deviation_threshold else "normal"
+    exit_threshold = (
+        deviation_enter_threshold
+        if deviation_exit_threshold is None
+        else deviation_exit_threshold
+    )
+    # Hysteresis prevents a value close to the boundary from alternating on
+    # every update: entering requires the high threshold, leaving the low one.
+    if previous_status == "deviating":
+        return "normal" if deviation < exit_threshold else "deviating"
+    return "deviating" if deviation > deviation_enter_threshold else "normal"

@@ -18,11 +18,15 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_FLOW_TEMPERATURE,
+    CONF_LOOP_DROP_PER_STATION,
+    CONF_LOOP_ORDER,
     CONF_MONTHLY_COST,
     CONF_MONTHLY_COST_BASELINE,
     CONF_OUTDOOR_TEMPERATURE,
+    CONF_ROOM_SYSTEM_TYPE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
+    DEFAULT_LOOP_DROP_PER_STATION,
     DOMAIN,
     SYSTEM_ONE_PIPE,
     SYSTEM_TWO_PIPE,
@@ -54,6 +58,21 @@ def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
                 CONF_MONTHLY_COST_BASELINE,
                 default=defaults.get(CONF_MONTHLY_COST_BASELINE, ""),
             ): str,
+            vol.Optional(
+                CONF_LOOP_ORDER, default=defaults.get(CONF_LOOP_ORDER, "")
+            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+            vol.Optional(
+                CONF_LOOP_DROP_PER_STATION,
+                default=defaults.get(CONF_LOOP_DROP_PER_STATION, DEFAULT_LOOP_DROP_PER_STATION),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=15,
+                    step=0.1,
+                    mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="°C",
+                )
+            ),
         }
     )
 
@@ -116,6 +135,15 @@ def _room_schema(defaults: dict[str, Any] | None = None, *, adding: bool = True)
             "better_thermostat_extension_enabled",
             default=defaults.get("better_thermostat_extension_enabled", False),
         ): selector.BooleanSelector(),
+        vol.Optional(
+            CONF_ROOM_SYSTEM_TYPE, default=defaults.get(CONF_ROOM_SYSTEM_TYPE, "")
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=["", SYSTEM_ONE_PIPE, SYSTEM_TWO_PIPE],
+                translation_key=CONF_ROOM_SYSTEM_TYPE,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
         vol.Optional(
             "external_heat_entities", default=defaults.get("external_heat_entities", [])
         ): selector.EntitySelector(

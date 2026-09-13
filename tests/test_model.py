@@ -102,6 +102,31 @@ def test_classify_heat_demand_deviating_beyond_threshold():
     assert model.classify_heat_demand(90.0, 50.0, 100.0, 48.0, 0.4) == "deviating"
 
 
+def test_classify_heat_demand_waits_for_stable_recent_window():
+    assert (
+        model.classify_heat_demand(90.0, 50.0, 100.0, 48.0, 0.5, 5.9, 6.0, 0.3)
+        == "learning"
+    )
+
+
+def test_classify_heat_demand_hysteresis_holds_existing_deviation():
+    assert (
+        model.classify_heat_demand(
+            70.0, 50.0, 100.0, 48.0, 0.5, 6.0, 6.0, 0.3, "deviating"
+        )
+        == "deviating"
+    )
+
+
+def test_classify_heat_demand_hysteresis_clears_below_exit_threshold():
+    assert (
+        model.classify_heat_demand(
+            60.0, 50.0, 100.0, 48.0, 0.5, 6.0, 6.0, 0.3, "deviating"
+        )
+        == "normal"
+    )
+
+
 def test_room_from_dict_wizard_submission():
     room = model.room_from_dict(
         {

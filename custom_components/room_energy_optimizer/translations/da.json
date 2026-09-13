@@ -11,10 +11,14 @@
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
-          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)"
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
+          "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
+          "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum."
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
+          "loop_order": "Én station pr. linje, i fysisk gennemløbsrækkefølge: enten et navn alene, eller \"navn|rum_slug\" for at knytte stationen til et konfigureret rum (slug'en er rumnavnet med små bogstaver og understreger i stedet for mellemrum). Et rum med flere radiatorer i slyngen får én linje pr. radiator med samme slug. Bruges kun af de diagnostiske \"eksperimentel kaskade\"-sensorer - det er rummets eget felt \"Varmeanlæg, undtagelse\" ovenfor der reelt ændrer hovedberegningen.",
+          "loop_drop_per_station_c": "Ukalibreret antagelse der kun bruges af de diagnostiske \"eksperimentel kaskade\"-sensorer - intet i integrationen måler det reelle temperaturfald pr. radiator."
         }
       },
       "add_room": {
@@ -59,10 +63,14 @@
           "flow_temperature_entity": "Fremløbstemperatur-sensor",
           "outdoor_temperature_entity": "Udetemperatur-sensor (valgfri)",
           "monthly_cost_entity": "Månedlig varmepris-sensor (valgfri)",
-          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)"
+          "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
+          "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
+          "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum."
+          "outdoor_temperature_entity": "Aktiverer den vejr-normaliserede varmebehovsstatus pr. rum.",
+          "loop_order": "Én station pr. linje, i fysisk gennemløbsrækkefølge: enten et navn alene, eller \"navn|rum_slug\" for at knytte stationen til et konfigureret rum (slug'en er rumnavnet med små bogstaver og understreger i stedet for mellemrum). Et rum med flere radiatorer i slyngen får én linje pr. radiator med samme slug. Bruges kun af de diagnostiske \"eksperimentel kaskade\"-sensorer - det er rummets eget felt \"Varmeanlæg, undtagelse\" ovenfor der reelt ændrer hovedberegningen.",
+          "loop_drop_per_station_c": "Ukalibreret antagelse der kun bruges af de diagnostiske \"eksperimentel kaskade\"-sensorer - intet i integrationen måler det reelle temperaturfald pr. radiator."
         }
       },
       "manage_rooms": {
@@ -83,6 +91,7 @@
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned (kun migrering)",
           "better_thermostat_extension_enabled": "Aktivér valgfri Better Thermostat-udvidelse",
+          "system_type_override": "Varmeanlæg, undtagelse (valgfri)",
           "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
           "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
           "stove_on_temperature": "Brændeovn aktiv over",
@@ -92,6 +101,7 @@
         "data_description": {
           "initial_valve_hours": "Lad stå på 0, medmindre du migrerer midt i måneden fra en ældre opsætning.",
           "better_thermostat_extension_enabled": "Tilføjer ekstern-varme-vagt og åbningskontaktdata. Slået fra påvirker integrationen ikke Better Thermostats læring.",
+          "system_type_override": "Brug denne når rummet sidder på sin egen gren der afviger fra husets anlæg (fx et 2-strenget garage- eller køkkenkredsløb i et ellers 1-strenget hus). Lad stå på standard for at følge husets indstilling.",
           "external_heat_entities": "Climate-entiteter tæller kun, mens hvac_action er heating. Binære sensorer tæller, mens de er slået til.",
           "stove_temperature_entity": "Bruger hysterese, så almindelig sensorstøj ikke pauser og genoptager læringen gentagne gange."
         }
@@ -116,6 +126,7 @@
           "radiator_count": "Antal radiatorer",
           "initial_valve_hours": "Eksisterende ventiltimer denne måned",
           "better_thermostat_extension_enabled": "Aktivér valgfri Better Thermostat-udvidelse",
+          "system_type_override": "Varmeanlæg, undtagelse (valgfri)",
           "external_heat_entities": "Varmepumper eller binære sensorer for ekstern varme",
           "stove_temperature_entity": "Brændeovnens temperatursensor (valgfri)",
           "stove_on_temperature": "Brændeovn aktiv over",
@@ -131,6 +142,13 @@
   "selector": {
     "system_type": {
       "options": {
+        "one_pipe": "Et-strengsanlæg",
+        "two_pipe": "To-strengsanlæg"
+      }
+    },
+    "system_type_override": {
+      "options": {
+        "": "Som husets anlæg",
         "one_pipe": "Et-strengsanlæg",
         "two_pipe": "To-strengsanlæg"
       }
