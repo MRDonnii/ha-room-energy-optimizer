@@ -148,7 +148,7 @@
     },
     "system_type_override": {
       "options": {
-        "": "Same as house-wide setting",
+        "inherit": "Same as house-wide setting",
         "one_pipe": "One-pipe system",
         "two_pipe": "Two-pipe system"
       }

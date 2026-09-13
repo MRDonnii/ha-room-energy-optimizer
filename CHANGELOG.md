@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+
+- Fix Home Assistant translation validation for the per-room system inheritance option.
+- Fix the Python 3.12/ruff type-annotation check and add inheritance normalisation coverage.
+
 ## 1.8.0
 
 - Stabilise heat-demand diagnostics with a six-hour recent EMA instead of 30 minutes.

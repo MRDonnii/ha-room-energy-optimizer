@@ -131,6 +131,8 @@ def room_from_dict(data: dict[str, Any], existing_slugs: set[str]) -> RoomConfig
     if stove_off >= stove_on:
         raise ValueError("stove off temperature must be below on temperature")
     system_type_override = str(data.get("system_type_override", "") or "")
+    if system_type_override == "inherit":
+        system_type_override = ""
     if system_type_override not in ("", "one_pipe", "two_pipe"):
         raise ValueError("system type override must be one_pipe or two_pipe")
     return RoomConfig(
@@ -170,7 +172,7 @@ def rooms_from_options(raw: list[dict[str, Any]] | str) -> list[RoomConfig]:
     return rooms
 
 
-def room_one_pipe(room: "RoomConfig", global_system_type: str) -> bool:
+def room_one_pipe(room: RoomConfig, global_system_type: str) -> bool:
     """Resolve whether one room's estimate should use the one-pipe formula.
 
     A room's own `system_type_override` wins when set (e.g. Garage/Køkken on
