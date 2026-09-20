@@ -17,7 +17,7 @@ equipment. It reads Better Thermostat's public attributes and can optionally
 publish an external-heat learning guard. A cold room can therefore keep
 receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.8.1**
+**Current version: 1.8.2**
 
 ## What it provides
 
@@ -38,6 +38,17 @@ Devices & services), with:
 It also creates a total estimated heat-demand sensor and a data-health binary
 sensor on a shared hub device. All calculations fail visibly when required
 source data is missing.
+
+### Radiator-stressed diagnostic
+
+The per-room radiator-stressed binary sensor is a raw diagnostic signal. It is
+active while the calculated valve opening is at least 99% and the room remains
+more than 0.3 °C below its target. Its attributes include the climate entity,
+valve opening, current and target temperatures, temperature deficit and the
+configured flow temperature. Automations can use the values captured on the
+state transition to compare temperature progress over their own observation
+period; the integration itself does not send notifications or impose a fixed
+observation time.
 
 ## Heat demand status (optional)
 

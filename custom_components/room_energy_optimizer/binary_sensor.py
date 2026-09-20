@@ -100,6 +100,34 @@ class RadiatorStressedSensor(OptimizerEntity, BinarySensorEntity):
             return False
         return valve is not None and valve >= 99 and target - current > 0.3
 
+    @property
+    def extra_state_attributes(self):
+        """Expose the measurements captured with each stressed-state transition.
+
+        Home Assistant keeps the attributes from the original ``off`` to ``on``
+        transition while a state trigger is waiting.  Consumers can therefore
+        compare the room temperature at the beginning and end of an observation
+        period without duplicating the optimizer's room/entity mapping.
+        """
+        climate = self.hass.states.get(self.room.climate_entity)
+        flow_temperature = self.runtime._flow_temperature()
+        try:
+            target = float(climate.attributes["temperature"])
+            current = float(climate.attributes["current_temperature"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            target = None
+            current = None
+        return {
+            "climate_entity": self.room.climate_entity,
+            "valve_opening": self.runtime.valves[self.room.slug],
+            "current_temperature": current,
+            "target_temperature": target,
+            "temperature_deficit": (
+                round(target - current, 2) if target is not None and current is not None else None
+            ),
+            "flow_temperature": flow_temperature,
+        }
+
 
 class ExternalHeatSensor(OptimizerEntity, BinarySensorEntity):
     """Expose the guard consumed by the Better Thermostat compatibility hook."""
