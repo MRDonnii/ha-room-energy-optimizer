@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.2
+
+- Expose the climate entity, valve opening, room temperature, target,
+  temperature deficit and flow temperature on each radiator-stressed binary
+  sensor so downstream automations can evaluate progress over an observation
+  period.
+
 ## 1.8.1
 
 - Fix Home Assistant translation validation for the per-room system inheritance option.
