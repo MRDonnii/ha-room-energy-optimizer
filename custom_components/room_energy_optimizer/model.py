@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import math
 import re
+import statistics
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -276,75 +278,375 @@ def estimated_power(
     return max(0.0, rated_power_w * valve_percent / 100.0 * temperature_factor)
 
 
-def heat_demand_ratio(
-    power_w: float,
-    indoor_target: float,
-    outdoor_temp: float,
-    min_delta: float = 2.0,
-) -> float | None:
-    """Return estimated heat output per degree of indoor/outdoor lift (W/°C).
+# --- Weather-normalised heat demand, model v3 (energy signature) -------------
+#
+# A room's heat demand is judged from an energy balance instead of from single
+# samples: estimated radiator energy divided by the degree-hours between room and
+# outdoor temperature over the same clean period (W/°C). Minutes with a closed
+# radiator count as zero output, so heating longer or shorter is visible. The
+# recent 48-hour value is compared with the room's own completed days that had
+# the most similar weather, using their median and robust spread.
 
-    This normalises heat demand for outdoor temperature, so a room's ratio is
-    comparable across a mild and a cold day. Returns None when the lift is
-    too small for the ratio to be meaningful (near-zero denominator).
+DEMAND_STATUSES = ("learning", "normal", "deviating")
+
+_WIND_TO_MS = {"m/s": 1.0, "km/h": 1 / 3.6, "mph": 0.44704, "kn": 0.514444, "ft/s": 0.3048}
+
+
+def wind_speed_ms(value: float, unit: str | None) -> float:
+    """Convert a wind speed reading to m/s (Beaufort via the WMO relation)."""
+    if unit == "Beaufort":
+        return 0.836 * max(0.0, value) ** 1.5
+    return value * _WIND_TO_MS.get(unit or "m/s", 1.0)
+
+
+@dataclass(slots=True)
+class DemandTotals:
+    """Energy-balance sums for one hour, one day or one window."""
+
+    energy_wh: float = 0.0
+    degree_hours: float = 0.0
+    clean_hours: float = 0.0
+    excluded_hours: float = 0.0
+    wind_ms_hours: float = 0.0
+    wind_hours: float = 0.0
+
+    def add(
+        self, hours: float, power_w: float, lift: float, wind_ms: float | None, clean: bool
+    ) -> None:
+        """Add one sample; excluded samples only count as excluded time."""
+        if not clean:
+            self.excluded_hours += hours
+            return
+        self.energy_wh += power_w * hours
+        self.degree_hours += lift * hours
+        self.clean_hours += hours
+        if wind_ms is not None:
+            self.wind_ms_hours += wind_ms * hours
+            self.wind_hours += hours
+
+    def merge(self, other: DemandTotals) -> None:
+        self.energy_wh += other.energy_wh
+        self.degree_hours += other.degree_hours
+        self.clean_hours += other.clean_hours
+        self.excluded_hours += other.excluded_hours
+        self.wind_ms_hours += other.wind_ms_hours
+        self.wind_hours += other.wind_hours
+
+    @property
+    def mean_lift(self) -> float | None:
+        return self.degree_hours / self.clean_hours if self.clean_hours > 0 else None
+
+    @property
+    def mean_wind(self) -> float | None:
+        return self.wind_ms_hours / self.wind_hours if self.wind_hours > 0 else None
+
+    def w_per_degree(self, min_clean_hours: float, min_mean_lift: float) -> float | None:
+        """Estimated radiator heat per degree of room/outdoor difference (W/°C)."""
+        lift = self.mean_lift
+        if (
+            self.clean_hours < min_clean_hours
+            or lift is None
+            or lift < min_mean_lift
+            or self.degree_hours <= 0
+        ):
+            return None
+        return self.energy_wh / self.degree_hours
+
+    def to_list(self) -> list[float]:
+        return [
+            round(value, 4)
+            for value in (
+                self.energy_wh,
+                self.degree_hours,
+                self.clean_hours,
+                self.excluded_hours,
+                self.wind_ms_hours,
+                self.wind_hours,
+            )
+        ]
+
+    @classmethod
+    def from_list(cls, values: Any) -> DemandTotals:
+        if not isinstance(values, list) or len(values) != 6:
+            return cls()
+        try:
+            return cls(*(float(value) for value in values))
+        except (TypeError, ValueError):
+            return cls()
+
+
+@dataclass(frozen=True, slots=True)
+class DemandBaseline:
+    """What a room normally needs in weather like the recent window's."""
+
+    days: int
+    compared: int = 0
+    expected: float | None = None
+    spread: float | None = None
+    lift_range: tuple[float, float] | None = None
+    wind_range: tuple[float, float] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DemandDay:
+    """One valid completed day of a room's energy balance."""
+
+    w_per_degree: float
+    lift: float
+    wind: float | None
+
+
+def learn_demand_baseline(
+    days: list[DemandDay],
+    lift: float | None,
+    wind: float | None,
+    *,
+    min_days: int,
+    max_lift_diff: float,
+    wind_scale: float,
+    min_similar: int,
+    max_similar: int,
+    min_relative_spread: float,
+    min_spread_w: float,
+) -> DemandBaseline:
+    """Learn a room's normal W/°C from its days with the most similar weather.
+
+    Days count as comparable when their mean room/outdoor difference is within
+    `max_lift_diff` of the recent one; the closest are chosen, with wind as a
+    tie-breaker (`wind_scale` m/s weighs as much as 1 °C). The normal is their
+    median and the spread their robust standard deviation (MAD), never below
+    `min_relative_spread` of the normal or `min_spread_w` of average output.
     """
-    delta = indoor_target - outdoor_temp
-    if delta < min_delta:
-        return None
-    return power_w / delta
+    if len(days) < min_days or lift is None or lift <= 0:
+        return DemandBaseline(len(days))
 
+    def distance(day: DemandDay) -> float:
+        wind_part = 0.0 if wind is None or day.wind is None else abs(day.wind - wind) / wind_scale
+        return abs(day.lift - lift) + wind_part
 
-def update_ema(
-    previous: float | None,
-    sample: float,
-    elapsed_hours: float,
-    half_life_hours: float,
-) -> float:
-    """Time-weighted exponential moving average update.
-
-    Unlike a fixed-alpha EMA, the weight given to `sample` scales with how
-    much time actually elapsed since the previous update, so a missed or
-    delayed poll does not silently change the effective averaging window.
-    """
-    if previous is None or elapsed_hours <= 0:
-        return sample
-    alpha = 1 - 0.5 ** (elapsed_hours / half_life_hours)
-    return previous + alpha * (sample - previous)
-
-
-def classify_heat_demand(
-    recent_ratio: float | None,
-    baseline_ratio: float | None,
-    baseline_hours: float,
-    min_baseline_hours: float,
-    deviation_enter_threshold: float,
-    recent_hours: float = 0.0,
-    min_recent_hours: float = 0.0,
-    deviation_exit_threshold: float | None = None,
-    previous_status: str = "learning",
-) -> str:
-    """Classify a room's current weather-normalised heat demand.
-
-    Returns "learning" until enough baseline data exists to judge, then
-    "normal" or "deviating" depending on how far the recent ratio has moved
-    from the room's own learned baseline ratio.
-    """
-    if (
-        recent_ratio is None
-        or baseline_ratio is None
-        or baseline_ratio <= 0
-        or baseline_hours < min_baseline_hours
-        or recent_hours < min_recent_hours
-    ):
-        return "learning"
-    deviation = abs(recent_ratio - baseline_ratio) / baseline_ratio
-    exit_threshold = (
-        deviation_enter_threshold
-        if deviation_exit_threshold is None
-        else deviation_exit_threshold
+    similar = sorted((day for day in days if abs(day.lift - lift) <= max_lift_diff), key=distance)[
+        :max_similar
+    ]
+    if len(similar) < min_similar:
+        return DemandBaseline(len(days), len(similar))
+    values = [day.w_per_degree for day in similar]
+    expected = statistics.median(values)
+    mad = statistics.median(abs(value - expected) for value in values)
+    spread = max(1.4826 * mad, min_relative_spread * expected, min_spread_w / lift)
+    lifts = [day.lift for day in similar]
+    winds = [day.wind for day in similar if day.wind is not None]
+    return DemandBaseline(
+        len(days),
+        len(similar),
+        expected,
+        spread,
+        (min(lifts), max(lifts)),
+        (min(winds), max(winds)) if winds else None,
     )
-    # Hysteresis prevents a value close to the boundary from alternating on
-    # every update: entering requires the high threshold, leaving the low one.
+
+
+def classify_demand(
+    recent: float | None,
+    baseline: DemandBaseline,
+    previous_status: str,
+    *,
+    z_enter: float,
+    z_exit: float,
+) -> tuple[str, float | None]:
+    """Return the status and robust z-score of the recent W/°C value.
+
+    Entering "deviating" requires the recent value to lie `z_enter` spreads from
+    the room's normal; leaving it requires coming back within `z_exit`.
+    """
+    if recent is None or baseline.expected is None or not baseline.spread:
+        return "learning", None
+    z_score = (recent - baseline.expected) / baseline.spread
     if previous_status == "deviating":
-        return "normal" if deviation < exit_threshold else "deviating"
-    return "deviating" if deviation > deviation_enter_threshold else "normal"
+        return ("normal" if abs(z_score) < z_exit else "deviating"), z_score
+    return ("deviating" if abs(z_score) > z_enter else "normal"), z_score
+
+
+class DemandModel:
+    """Hourly and daily energy-balance history of one room."""
+
+    def __init__(self) -> None:
+        self.hours: dict[int, DemandTotals] = {}
+        self.days: dict[str, DemandTotals] = {}
+        self.status = "learning"
+
+    @property
+    def empty(self) -> bool:
+        return not self.hours and not self.days
+
+    def add(
+        self,
+        when: float,
+        day: str,
+        hours: float,
+        power_w: float,
+        lift: float,
+        wind_ms: float | None,
+        clean: bool,
+    ) -> None:
+        """Add a sample taken at epoch `when` on local date `day`."""
+        hour = int(when // 3600) * 3600
+        for bucket in (
+            self.hours.setdefault(hour, DemandTotals()),
+            self.days.setdefault(day, DemandTotals()),
+        ):
+            bucket.add(hours, power_w, lift, wind_ms, clean)
+
+    def merge(self, other: DemandModel) -> None:
+        """Fold in samples from a disjoint period, e.g. replayed history."""
+        for key, bucket in other.hours.items():
+            self.hours.setdefault(key, DemandTotals()).merge(bucket)
+        for key, bucket in other.days.items():
+            self.days.setdefault(key, DemandTotals()).merge(bucket)
+
+    def prune(self, now: float, window_hours: int, keep_days: int) -> None:
+        oldest = int(now // 3600) * 3600 - window_hours * 3600
+        self.hours = {key: bucket for key, bucket in self.hours.items() if key >= oldest}
+        for key in sorted(self.days)[:-keep_days]:
+            del self.days[key]
+
+    def recent(self, now: float, window_hours: int) -> DemandTotals:
+        """Sums over the last `window_hours` clock hours, the running hour included."""
+        oldest = int(now // 3600) * 3600 - (window_hours - 1) * 3600
+        totals = DemandTotals()
+        for key, bucket in self.hours.items():
+            if key >= oldest:
+                totals.merge(bucket)
+        return totals
+
+    def valid_days(
+        self, today: str, history_days: int, min_clean_hours: float, min_mean_lift: float
+    ) -> list[tuple[str, DemandTotals]]:
+        """The newest `history_days` completed days with enough clean data."""
+        days = [
+            (key, bucket)
+            for key, bucket in sorted(self.days.items())
+            if key < today and bucket.w_per_degree(min_clean_hours, min_mean_lift) is not None
+        ]
+        return days[-history_days:]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "hours": {str(key): bucket.to_list() for key, bucket in self.hours.items()},
+            "days": {key: bucket.to_list() for key, bucket in self.days.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> DemandModel:
+        model = cls()
+        if not isinstance(data, dict):
+            return model
+        if data.get("status") in DEMAND_STATUSES:
+            model.status = data["status"]
+        for key, values in (data.get("hours") or {}).items():
+            try:
+                model.hours[int(key)] = DemandTotals.from_list(values)
+            except (TypeError, ValueError):
+                continue
+        for key, values in (data.get("days") or {}).items():
+            if isinstance(key, str):
+                model.days[key] = DemandTotals.from_list(values)
+        return model
+
+
+class ExclusionTail:
+    """Keep samples out for a while after external heat or an opening ends.
+
+    Right after an air-conditioner stops the radiator has little to do, and
+    right after a window closes it has extra to do; neither is normal demand.
+    """
+
+    def __init__(self, tail_hours: float) -> None:
+        self.tail_seconds = tail_hours * 3600
+        self.until: float | None = None
+
+    def clean(self, when: float, excluded: bool) -> bool:
+        if excluded:
+            self.until = when + self.tail_seconds
+            return False
+        return self.until is None or when >= self.until
+
+
+def contact_open(attributes: Mapping[str, Any]) -> bool:
+    """Better Thermostat's debounced window/door state."""
+    return bool(attributes.get("window_open", False) or attributes.get("door_open", False))
+
+
+def evaluate_external_heat(
+    room: RoomConfig,
+    lookup: Callable[[str], tuple[str, Mapping[str, Any]] | None],
+    stove_active: bool,
+) -> tuple[bool | None, list[str], bool]:
+    """Return (active, active sources, stove state) for a room's external heat.
+
+    `lookup` returns (state, attributes) for an entity or None when it is
+    missing. Active is None when a configured source cannot be read. Climate
+    sources count only while `hvac_action` is heating; the stove temperature
+    uses its on/off hysteresis.
+    """
+    if not room.better_thermostat_extension_enabled:
+        return False, [], stove_active
+    active_sources: list[str] = []
+    valid = True
+    for entity_id in room.external_heat_entities:
+        item = lookup(entity_id)
+        if item is None or item[0] in ("unknown", "unavailable"):
+            valid = False
+            continue
+        state, attributes = item
+        active = (
+            attributes.get("hvac_action") == "heating"
+            if entity_id.startswith("climate.")
+            else state == "on"
+        )
+        if active:
+            active_sources.append(entity_id)
+    if room.stove_temperature_entity:
+        item = lookup(room.stove_temperature_entity)
+        try:
+            temperature = float(item[0] if item else "")
+        except (TypeError, ValueError):
+            valid = False
+        else:
+            if stove_active:
+                stove_active = temperature >= room.stove_off_temperature
+            else:
+                stove_active = temperature > room.stove_on_temperature
+            if stove_active:
+                active_sources.append(room.stove_temperature_entity)
+    return (bool(active_sources) if valid else None), active_sources, stove_active
+
+
+def demand_sample(
+    rated_power_w: float,
+    one_pipe: bool,
+    valve: float | None,
+    flow_temperature: float | None,
+    room_temperature: float | None,
+    outdoor_temperature: float | None,
+) -> tuple[float, float] | None:
+    """Return (estimated radiator W, room minus outdoor °C) or None when unknown."""
+    if valve is None or room_temperature is None or outdoor_temperature is None:
+        return None
+    power = estimated_power(rated_power_w, valve, flow_temperature, room_temperature, one_pipe)
+    if power is None:
+        return None
+    return power, room_temperature - outdoor_temperature
+
+
+class StepSeries:
+    """Forward-filled lookup in a time-ordered series while stepping forward."""
+
+    def __init__(self, points: list[tuple[float, Any]]) -> None:
+        self._points = sorted(points, key=lambda point: point[0])
+        self._index = -1
+
+    def at(self, when: float) -> Any:
+        while self._index + 1 < len(self._points) and self._points[self._index + 1][0] <= when:
+            self._index += 1
+        return self._points[self._index][1] if self._index >= 0 else None

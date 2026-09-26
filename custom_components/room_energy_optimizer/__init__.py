@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -18,31 +22,78 @@ from .const import (
     CONF_OUTDOOR_TEMPERATURE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
+    CONF_WIND_SPEED,
     DEFAULT_LOOP_DROP_PER_STATION,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    HEAT_DEMAND_BASELINE_HALF_LIFE_HOURS,
-    HEAT_DEMAND_MIN_DELTA,
-    HEAT_DEMAND_MIN_POWER_W,
-    HEAT_DEMAND_MIN_VALVE_PERCENT,
+    HEAT_DEMAND_BACKFILL_DAYS,
+    HEAT_DEMAND_EXCLUSION_TAIL_HOURS,
+    HEAT_DEMAND_HISTORY_DAYS,
+    HEAT_DEMAND_KEEP_DAYS,
+    HEAT_DEMAND_MAX_SIMILAR_DAYS,
+    HEAT_DEMAND_MIN_DAY_CLEAN_HOURS,
+    HEAT_DEMAND_MIN_MEAN_LIFT,
+    HEAT_DEMAND_MIN_RECENT_CLEAN_HOURS,
+    HEAT_DEMAND_MIN_RELATIVE_SPREAD,
+    HEAT_DEMAND_MIN_SIMILAR_DAYS,
+    HEAT_DEMAND_MIN_SPREAD_W,
+    HEAT_DEMAND_MIN_VALID_DAYS,
     HEAT_DEMAND_MODEL_VERSION,
-    HEAT_DEMAND_RECENT_HALF_LIFE_HOURS,
+    HEAT_DEMAND_RECENT_WINDOW_HOURS,
+    HEAT_DEMAND_SIMILAR_MAX_LIFT_DIFF,
+    HEAT_DEMAND_SIMILAR_WIND_SCALE_MS,
+    HEAT_DEMAND_Z_ENTER,
+    HEAT_DEMAND_Z_EXIT,
     PLATFORMS,
     SYSTEM_ONE_PIPE,
+    VERSION,
 )
 from .model import (
+    DemandBaseline,
+    DemandDay,
+    DemandModel,
+    DemandTotals,
+    ExclusionTail,
     RoomConfig,
+    StepSeries,
     cascade_flow_temperature,
-    estimated_power,
-    heat_demand_ratio,
+    classify_demand,
+    contact_open,
+    demand_sample,
+    evaluate_external_heat,
+    learn_demand_baseline,
     parse_loop_order,
     room_loop_positions,
     room_one_pipe,
     room_to_dict,
     rooms_from_options,
-    update_ema,
     valve_percentage,
+    wind_speed_ms,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+# Only these climate attributes are needed to replay history.
+_REPLAY_ATTRIBUTES = (
+    "calibration_balance",
+    "current_temperature",
+    "window_open",
+    "door_open",
+    "hvac_action",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DemandView:
+    """A room's evaluated heat demand, shared by its sensors."""
+
+    status: str
+    reason: str | None
+    recent: DemandTotals
+    recent_w_per_degree: float | None
+    baseline: DemandBaseline
+    z_score: float | None
+    baseline_clean_hours: float
 
 
 class RuntimeData:
@@ -60,15 +111,13 @@ class RuntimeData:
         )
         self.valves: dict[str, float | None] = {room.slug: None for room in self.rooms}
         self.hours: dict[str, float] = {room.slug: room.initial_valve_hours for room in self.rooms}
-        # Weather-normalised heat-demand baseline (W per °C of indoor/outdoor
-        # lift). `ratio_recent` is a fast EMA of the live ratio, `ratio_baseline`
-        # a slow EMA that represents "normal" for that room, and
-        # `baseline_hours` counts how many hours of valid samples fed it.
-        # Unlike `hours`, these never reset on a month boundary.
-        self.ratio_recent: dict[str, float | None] = {room.slug: None for room in self.rooms}
-        self.recent_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
-        self.ratio_baseline: dict[str, float | None] = {room.slug: None for room in self.rooms}
-        self.baseline_hours: dict[str, float] = {room.slug: 0.0 for room in self.rooms}
+        # Weather-normalised heat demand (model v3): an hourly and daily energy
+        # balance per room. Unlike `hours`, it never resets on a month boundary.
+        self.demand: dict[str, DemandModel] = {room.slug: DemandModel() for room in self.rooms}
+        self.demand_views: dict[str, DemandView] = {}
+        self._tails = {
+            room.slug: ExclusionTail(HEAT_DEMAND_EXCLUSION_TAIL_HOURS) for room in self.rooms
+        }
         self.external_heat_active: dict[str, bool | None] = {room.slug: None for room in self.rooms}
         self.external_heat_sources: dict[str, list[str]] = {room.slug: [] for room in self.rooms}
         self.contact_open: dict[str, bool] = {room.slug: False for room in self.rooms}
@@ -89,32 +138,35 @@ class RuntimeData:
                     if key in self.hours
                 }
             )
-        # Model v1 included closed radiators as zero-demand samples. Those
-        # derived baselines are intentionally discarded once; configuration,
-        # valve-hours and all other persisted data remain untouched.
-        demand_data = (
-            stored
-            if stored.get("heat_demand_model_version") == HEAT_DEMAND_MODEL_VERSION
-            else {}
-        )
-        for slug, data in demand_data.get("baseline", {}).items():
-            if slug not in self.ratio_baseline or not isinstance(data, dict):
-                continue
-            ratio = data.get("ratio")
-            self.ratio_baseline[slug] = None if ratio is None else float(ratio)
-            self.baseline_hours[slug] = float(data.get("hours", 0.0))
-            recent = data.get("recent_ratio")
-            self.ratio_recent[slug] = None if recent is None else float(recent)
-            self.recent_hours[slug] = float(data.get("recent_hours", 0.0))
+        # Models v1/v2 kept per-sample moving averages whose learned baseline
+        # started from the very first sample. They are dropped once; the
+        # energy-balance history is rebuilt from the recorder instead.
+        # Configuration, valve-hours and all other persisted data are kept.
+        if stored.get("heat_demand_model_version") == HEAT_DEMAND_MODEL_VERSION:
+            for slug, data in stored.get("demand", {}).items():
+                if slug in self.demand:
+                    self.demand[slug] = DemandModel.from_dict(data)
+        backfill_until = dt_util.utcnow()
         await self.async_update()
-        from datetime import timedelta
-
         self._unsub = async_track_time_interval(
             self.hass, self.async_update, timedelta(seconds=DEFAULT_SCAN_INTERVAL)
         )
+        missing = [room for room in self.rooms if self.demand[room.slug].empty]
+        if missing and self._outdoor_entity():
+            self.entry.async_create_background_task(
+                self.hass,
+                self._async_backfill(missing, backfill_until),
+                f"{DOMAIN} heat demand history",
+            )
+
+    def _outdoor_entity(self) -> str:
+        return self.entry.options.get(CONF_OUTDOOR_TEMPERATURE, "") or ""
+
+    def _wind_entity(self) -> str:
+        return self.entry.options.get(CONF_WIND_SPEED, "") or ""
 
     def _outdoor_temperature(self) -> float | None:
-        entity_id = self.entry.options.get(CONF_OUTDOOR_TEMPERATURE, "")
+        entity_id = self._outdoor_entity()
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)
@@ -124,6 +176,17 @@ class RuntimeData:
             return float(state.state)
         except (TypeError, ValueError):
             return None
+
+    def _wind_speed(self) -> float | None:
+        entity_id = self._wind_entity()
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None:
+            return None
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None
+        return wind_speed_ms(value, state.attributes.get("unit_of_measurement"))
 
     def _flow_temperature(self) -> float | None:
         entity_id = self.entry.options.get(CONF_FLOW_TEMPERATURE)
@@ -146,80 +209,89 @@ class RuntimeData:
             return None
         return cascade_flow_temperature(flow_temperature, positions, self.loop_drop_per_station_c)
 
-    def _update_heat_demand_baseline(
-        self, room: RoomConfig, valve: float | None, elapsed_hours: float
-    ) -> None:
-        outdoor_temp = self._outdoor_temperature()
-        flow_temp = self._flow_temperature()
-        if valve is None or outdoor_temp is None or flow_temp is None:
-            return
-        state = self.hass.states.get(room.climate_entity)
-        if state is None:
-            return
-        try:
-            room_temp = float(state.attributes["current_temperature"])
-            target_temp = float(state.attributes["temperature"])
-        except (KeyError, TypeError, ValueError):
-            return
-        global_system_type = self.entry.options.get(CONF_SYSTEM_TYPE, SYSTEM_ONE_PIPE)
-        one_pipe = room_one_pipe(room, global_system_type)
-        power = estimated_power(room.rated_power_w, valve, flow_temp, room_temp, one_pipe)
-        if (
-            power is None
-            or valve < HEAT_DEMAND_MIN_VALVE_PERCENT
-            or power < HEAT_DEMAND_MIN_POWER_W
-            or elapsed_hours <= 0
-        ):
-            return
-        ratio = heat_demand_ratio(power, target_temp, outdoor_temp, HEAT_DEMAND_MIN_DELTA)
-        if ratio is None:
-            return
-        self.ratio_recent[room.slug] = update_ema(
-            self.ratio_recent[room.slug], ratio, elapsed_hours, HEAT_DEMAND_RECENT_HALF_LIFE_HOURS
-        )
-        self.recent_hours[room.slug] += elapsed_hours
-        self.ratio_baseline[room.slug] = update_ema(
-            self.ratio_baseline[room.slug],
-            ratio,
-            elapsed_hours,
-            HEAT_DEMAND_BASELINE_HALF_LIFE_HOURS,
-        )
-        self.baseline_hours[room.slug] += elapsed_hours
+    def _one_pipe(self, room: RoomConfig) -> bool:
+        return room_one_pipe(room, self.entry.options.get(CONF_SYSTEM_TYPE, SYSTEM_ONE_PIPE))
 
     def _read_external_heat(self, room: RoomConfig) -> tuple[bool | None, list[str]]:
         """Return external-heat state and the sources currently producing heat."""
-        if not room.better_thermostat_extension_enabled:
-            return False, []
-        active_sources: list[str] = []
-        valid = True
-        for entity_id in room.external_heat_entities:
+
+        def lookup(entity_id: str):
             state = self.hass.states.get(entity_id)
-            if state is None or state.state in ("unknown", "unavailable"):
-                valid = False
-                continue
-            active = (
-                state.attributes.get("hvac_action") == "heating"
-                if entity_id.startswith("climate.")
-                else state.state == "on"
+            return None if state is None else (state.state, state.attributes)
+
+        active, sources, self._stove_active[room.slug] = evaluate_external_heat(
+            room, lookup, self._stove_active[room.slug]
+        )
+        return active, sources
+
+    def _evaluate_demand(self, room: RoomConfig, now: datetime) -> DemandView:
+        """Compare the recent window with the room's own learned days."""
+        model = self.demand[room.slug]
+        now_ts = now.timestamp()
+        recent = model.recent(now_ts, HEAT_DEMAND_RECENT_WINDOW_HOURS)
+        recent_value = recent.w_per_degree(
+            HEAT_DEMAND_MIN_RECENT_CLEAN_HOURS, HEAT_DEMAND_MIN_MEAN_LIFT
+        )
+        today = dt_util.as_local(now).date().isoformat()
+        days = model.valid_days(
+            today,
+            HEAT_DEMAND_HISTORY_DAYS,
+            HEAT_DEMAND_MIN_DAY_CLEAN_HOURS,
+            HEAT_DEMAND_MIN_MEAN_LIFT,
+        )
+        learned = [
+            DemandDay(value, bucket.mean_lift, bucket.mean_wind)
+            for _, bucket in days
+            if (
+                value := bucket.w_per_degree(
+                    HEAT_DEMAND_MIN_DAY_CLEAN_HOURS, HEAT_DEMAND_MIN_MEAN_LIFT
+                )
             )
-            if active:
-                active_sources.append(entity_id)
-        if room.stove_temperature_entity:
-            state = self.hass.states.get(room.stove_temperature_entity)
-            try:
-                temperature = float(state.state)
-            except (AttributeError, TypeError, ValueError):
-                valid = False
-            else:
-                stove_active = self._stove_active[room.slug]
-                if stove_active:
-                    stove_active = temperature >= room.stove_off_temperature
-                else:
-                    stove_active = temperature > room.stove_on_temperature
-                self._stove_active[room.slug] = stove_active
-                if stove_active:
-                    active_sources.append(room.stove_temperature_entity)
-        return (bool(active_sources) if valid else None), active_sources
+            is not None
+            and bucket.mean_lift is not None
+        ]
+        baseline = learn_demand_baseline(
+            learned,
+            recent.mean_lift,
+            recent.mean_wind,
+            min_days=HEAT_DEMAND_MIN_VALID_DAYS,
+            max_lift_diff=HEAT_DEMAND_SIMILAR_MAX_LIFT_DIFF,
+            wind_scale=HEAT_DEMAND_SIMILAR_WIND_SCALE_MS,
+            min_similar=HEAT_DEMAND_MIN_SIMILAR_DAYS,
+            max_similar=HEAT_DEMAND_MAX_SIMILAR_DAYS,
+            min_relative_spread=HEAT_DEMAND_MIN_RELATIVE_SPREAD,
+            min_spread_w=HEAT_DEMAND_MIN_SPREAD_W,
+        )
+        status, z_score = classify_demand(
+            recent_value,
+            baseline,
+            model.status,
+            z_enter=HEAT_DEMAND_Z_ENTER,
+            z_exit=HEAT_DEMAND_Z_EXIT,
+        )
+        model.status = status
+        reason = None
+        if len(learned) < HEAT_DEMAND_MIN_VALID_DAYS:
+            reason = "collecting_days"
+        elif recent_value is None:
+            lift = recent.mean_lift
+            reason = (
+                "too_mild"
+                if recent.clean_hours >= HEAT_DEMAND_MIN_RECENT_CLEAN_HOURS
+                and (lift is None or lift < HEAT_DEMAND_MIN_MEAN_LIFT)
+                else "recent_window_incomplete"
+            )
+        elif baseline.expected is None:
+            reason = "outside_learned_weather"
+        return DemandView(
+            status,
+            reason,
+            recent,
+            recent_value,
+            baseline,
+            z_score,
+            sum(bucket.clean_hours for _, bucket in days),
+        )
 
     async def async_update(self, _now: datetime | None = None) -> None:
         now = dt_util.now()
@@ -231,45 +303,209 @@ class RuntimeData:
         elapsed_hours = 0.0
         if self._last_sample is not None:
             elapsed_hours = min(300.0, max(0.0, (now - self._last_sample).total_seconds())) / 3600.0
+        outdoor = self._outdoor_temperature()
+        flow = self._flow_temperature()
+        wind = self._wind_speed()
+        now_ts = now.timestamp()
+        day = dt_util.as_local(now).date().isoformat()
         for room in self.rooms:
             state = self.hass.states.get(room.climate_entity)
-            current = None if state is None else valve_percentage(state.attributes)
+            attributes = state.attributes if state else {}
+            current = None if state is None else valve_percentage(attributes)
             external_heat, sources = self._read_external_heat(room)
             self.external_heat_active[room.slug] = external_heat
             self.external_heat_sources[room.slug] = sources
-            self.contact_open[room.slug] = bool(
-                room.better_thermostat_extension_enabled
-                and state
-                and (
-                    state.attributes.get("window_open", False)
-                    or state.attributes.get("door_open", False)
-                )
-            )
+            opened = contact_open(attributes)
+            self.contact_open[room.slug] = bool(room.better_thermostat_extension_enabled and opened)
             previous = self.valves.get(room.slug)
             if previous is not None and elapsed_hours:
                 self.hours[room.slug] += previous / 100.0 * elapsed_hours
             self.valves[room.slug] = current
-            if external_heat is False and not self.contact_open[room.slug]:
-                self._update_heat_demand_baseline(room, current, elapsed_hours)
+            if elapsed_hours:
+                self._sample_demand(
+                    room,
+                    now_ts,
+                    day,
+                    elapsed_hours,
+                    current,
+                    flow,
+                    attributes,
+                    outdoor,
+                    wind,
+                    excluded=external_heat is not False or opened,
+                )
+            self.demand[room.slug].prune(
+                now_ts, HEAT_DEMAND_RECENT_WINDOW_HOURS, HEAT_DEMAND_KEEP_DAYS
+            )
+            self.demand_views[room.slug] = self._evaluate_demand(room, now)
         self._last_sample = now
         self._store.async_delay_save(self._data_to_save, 300)
         for listener in list(self.listeners):
             listener()
+
+    def _sample_demand(
+        self,
+        room: RoomConfig,
+        when: float,
+        day: str,
+        hours: float,
+        valve: float | None,
+        flow: float | None,
+        attributes: Any,
+        outdoor: float | None,
+        wind: float | None,
+        *,
+        excluded: bool,
+        model: DemandModel | None = None,
+        tail: ExclusionTail | None = None,
+    ) -> None:
+        """Feed one live or replayed sample into a room's energy balance."""
+        try:
+            room_temperature = float(attributes["current_temperature"])
+        except (KeyError, TypeError, ValueError):
+            room_temperature = None
+        sample = demand_sample(
+            room.rated_power_w, self._one_pipe(room), valve, flow, room_temperature, outdoor
+        )
+        clean = (tail or self._tails[room.slug]).clean(when, excluded)
+        if sample is None:
+            return
+        (model or self.demand[room.slug]).add(when, day, hours, sample[0], sample[1], wind, clean)
+
+    async def _async_backfill(self, rooms: list[RoomConfig], until: datetime) -> None:
+        """Rebuild the energy balance of `rooms` once from recorded history."""
+        if "recorder" not in self.hass.config.components:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance, history
+
+            instance = get_instance(self.hass)
+            if not await instance.async_db_ready:
+                return
+            start = until - timedelta(days=HEAT_DEMAND_BACKFILL_DAYS)
+            wind_state = self.hass.states.get(self._wind_entity()) if self._wind_entity() else None
+            wind_unit = wind_state.attributes.get("unit_of_measurement") if wind_state else None
+            series: dict[str, list[tuple[float, Any]]] = {}
+            for entity_id in self._replay_entities(rooms):
+                # One entity at a time keeps memory low for chatty climate entities.
+                states = await instance.async_add_executor_job(
+                    partial(
+                        history.get_significant_states,
+                        self.hass,
+                        start,
+                        until,
+                        [entity_id],
+                        include_start_time_state=True,
+                        significant_changes_only=False,
+                        minimal_response=False,
+                        no_attributes=not entity_id.startswith("climate."),
+                    )
+                )
+                series[entity_id] = [
+                    (
+                        item.last_updated.timestamp(),
+                        (
+                            item.state,
+                            {
+                                key: item.attributes[key]
+                                for key in _REPLAY_ATTRIBUTES
+                                if key in item.attributes
+                            },
+                        ),
+                    )
+                    for item in states.get(entity_id, [])
+                ]
+            models = await self.hass.async_add_executor_job(
+                self._replay, rooms, series, start.timestamp(), until.timestamp(), wind_unit
+            )
+        except Exception:  # noqa: BLE001 - history is a bonus; live learning continues
+            _LOGGER.warning(
+                "Could not rebuild heat demand history from the recorder", exc_info=True
+            )
+            return
+        for slug, model in models.items():
+            self.demand[slug].merge(model)
+        self._store.async_delay_save(self._data_to_save, 1)
+        _LOGGER.info("Rebuilt heat demand history for %s rooms", len(models))
+        await self.async_update()
+
+    def _replay_entities(self, rooms: list[RoomConfig]) -> list[str]:
+        entity_ids = {
+            self.entry.options.get(CONF_FLOW_TEMPERATURE, ""),
+            self._outdoor_entity(),
+            self._wind_entity(),
+        }
+        for room in rooms:
+            entity_ids.add(room.climate_entity)
+            if room.better_thermostat_extension_enabled:
+                entity_ids.update(room.external_heat_entities)
+                entity_ids.add(room.stove_temperature_entity)
+        return sorted(entity_id for entity_id in entity_ids if entity_id)
+
+    def _replay(
+        self,
+        rooms: list[RoomConfig],
+        series: dict[str, list[tuple[float, Any]]],
+        start: float,
+        end: float,
+        wind_unit: str | None,
+    ) -> dict[str, DemandModel]:
+        """Run recorded history through the live sampling rules (executor)."""
+        lookups = {entity_id: StepSeries(points) for entity_id, points in series.items()}
+
+        def value(entity_id: str) -> float | None:
+            item = lookups[entity_id].at(when) if entity_id in lookups else None
+            try:
+                return float(item[0])
+            except (TypeError, ValueError):
+                return None
+
+        def lookup(entity_id: str):
+            return lookups[entity_id].at(when) if entity_id in lookups else None
+
+        models = {room.slug: DemandModel() for room in rooms}
+        tails = {room.slug: ExclusionTail(HEAT_DEMAND_EXCLUSION_TAIL_HOURS) for room in rooms}
+        stoves = {room.slug: False for room in rooms}
+        zone = dt_util.get_default_time_zone()
+        step = float(DEFAULT_SCAN_INTERVAL)
+        hours = step / 3600
+        flow_id = self.entry.options.get(CONF_FLOW_TEMPERATURE, "")
+        when = start + step
+        while when <= end:
+            flow = value(flow_id)
+            outdoor = value(self._outdoor_entity())
+            wind_raw = value(self._wind_entity()) if self._wind_entity() else None
+            wind = None if wind_raw is None else wind_speed_ms(wind_raw, wind_unit)
+            day = datetime.fromtimestamp(when, zone).date().isoformat()
+            for room in rooms:
+                climate = lookup(room.climate_entity)
+                attributes = climate[1] if climate else {}
+                external_heat, _, stoves[room.slug] = evaluate_external_heat(
+                    room, lookup, stoves[room.slug]
+                )
+                self._sample_demand(
+                    room,
+                    when,
+                    day,
+                    hours,
+                    valve_percentage(attributes),
+                    flow,
+                    attributes,
+                    outdoor,
+                    wind,
+                    excluded=external_heat is not False or contact_open(attributes),
+                    model=models[room.slug],
+                    tail=tails[room.slug],
+                )
+            when += step
+        return models
 
     def _data_to_save(self) -> dict[str, Any]:
         return {
             "heat_demand_model_version": HEAT_DEMAND_MODEL_VERSION,
             "month": self._month,
             "hours": self.hours,
-            "baseline": {
-                room.slug: {
-                    "ratio": self.ratio_baseline[room.slug],
-                    "hours": self.baseline_hours[room.slug],
-                    "recent_ratio": self.ratio_recent[room.slug],
-                    "recent_hours": self.recent_hours[room.slug],
-                }
-                for room in self.rooms
-            },
+            "demand": {room.slug: self.demand[room.slug].to_dict() for room in self.rooms},
         }
 
     def add_listener(self, listener: Any) -> Any:
@@ -299,6 +535,16 @@ async def _async_migrate_room_storage(hass: HomeAssistant, entry: ConfigEntry) -
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_room_storage(hass, entry)
+    # Room devices point at the hub via `via_device`, so the hub must exist
+    # before the platforms add the first room entity.
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=f"{entry.title} (Totals)",
+        manufacturer="Room Energy Optimizer",
+        model="Local hydronic estimator",
+        sw_version=VERSION,
+    )
     runtime = RuntimeData(hass, entry)
     await runtime.async_start()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime

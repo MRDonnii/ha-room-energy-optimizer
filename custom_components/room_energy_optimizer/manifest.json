@@ -1,6 +1,7 @@
 {
   "domain": "room_energy_optimizer",
   "name": "Room Energy Optimizer",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@MRDonnii"],
   "config_flow": true,
   "documentation": "https://github.com/MRDonnii/ha-room-energy-optimizer",
@@ -8,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/MRDonnii/ha-room-energy-optimizer/issues",
   "requirements": [],
-  "version": "1.8.2"
+  "version": "1.9.0"
 }

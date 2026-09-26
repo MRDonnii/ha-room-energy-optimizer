@@ -13,14 +13,12 @@ from .const import (
     CONF_OUTDOOR_TEMPERATURE,
     CONF_SYSTEM_TYPE,
     DOMAIN,
-    HEAT_DEMAND_DEVIATION_ENTER_THRESHOLD,
-    HEAT_DEMAND_DEVIATION_EXIT_THRESHOLD,
-    HEAT_DEMAND_MIN_BASELINE_HOURS,
-    HEAT_DEMAND_MIN_RECENT_HOURS,
+    HEAT_DEMAND_MIN_VALID_DAYS,
+    HEAT_DEMAND_RECENT_WINDOW_HOURS,
     SYSTEM_ONE_PIPE,
 )
 from .entity import OptimizerEntity
-from .model import classify_heat_demand, estimated_power, room_loop_positions, room_one_pipe
+from .model import estimated_power, room_loop_positions, room_one_pipe
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
@@ -74,6 +72,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     "mdi:home-thermometer-outline",
                 ),
                 HeatDemandStatusSensor(runtime, room),
+                HeatDemandPerDegreeSensor(runtime, room),
             ]
         )
         if room_loop_positions(room.slug, runtime.loop_stops):
@@ -235,10 +234,11 @@ class ExperimentalCascadePowerSensor(OptimizerEntity, SensorEntity):
 class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
     """Whether a room's weather-normalised heat demand looks normal.
 
-    Compares a fast (recent) and a slow (learned baseline) moving average of
-    the room's own watt-per-degree-of-lift ratio. Requires the optional
-    outdoor temperature sensor to be configured; stays "learning" until
-    enough hours of valid samples have been collected.
+    Compares the room's energy balance over the last 48 hours (estimated
+    radiator energy per degree-hour of room/outdoor difference) with its own
+    completed days that had the most similar weather. Requires the optional
+    outdoor temperature sensor; stays "learning" until there are seven valid
+    days, a full recent window and enough days with comparable weather.
     """
 
     _attr_icon = "mdi:thermometer-check"
@@ -250,46 +250,104 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
         super().__init__(runtime, f"{room.slug}_heat_demand_status", room=room)
         self.room = room
         self._attr_name = "Heat demand status"
-        self._last_status = "learning"
 
     @property
     def available(self) -> bool:
-        return bool(self.runtime.entry.options.get(CONF_OUTDOOR_TEMPERATURE, ""))
+        return bool(self.runtime.entry.options.get(CONF_OUTDOOR_TEMPERATURE, "")) and (
+            self.room.slug in self.runtime.demand_views
+        )
 
     @property
     def native_value(self):
-        status = classify_heat_demand(
-            self.runtime.ratio_recent[self.room.slug],
-            self.runtime.ratio_baseline[self.room.slug],
-            self.runtime.baseline_hours[self.room.slug],
-            HEAT_DEMAND_MIN_BASELINE_HOURS,
-            HEAT_DEMAND_DEVIATION_ENTER_THRESHOLD,
-            self.runtime.recent_hours[self.room.slug],
-            HEAT_DEMAND_MIN_RECENT_HOURS,
-            HEAT_DEMAND_DEVIATION_EXIT_THRESHOLD,
-            self._last_status,
-        )
-        self._last_status = status
-        return status
+        return self.runtime.demand_views[self.room.slug].status
 
     @property
     def extra_state_attributes(self):
-        recent = self.runtime.ratio_recent[self.room.slug]
-        baseline = self.runtime.ratio_baseline[self.room.slug]
+        view = self.runtime.demand_views.get(self.room.slug)
+        if view is None:
+            return {}
+        recent, baseline = view.recent, view.baseline
+        expected, spread = baseline.expected, baseline.spread
+        current = view.recent_w_per_degree
         deviation_percent = None
-        if recent is not None and baseline:
-            deviation_percent = round(100 * (recent - baseline) / baseline, 1)
+        if current is not None and expected:
+            deviation_percent = round(100 * (current - expected) / expected, 1)
+        normal_range = None
+        if expected is not None and spread is not None:
+            normal_range = [
+                round(max(0.0, expected - 2 * spread), 2),
+                round(expected + 2 * spread, 2),
+            ]
+
+        def rounded(value, digits=2):
+            return None if value is None else round(value, digits)
+
         return {
-            "current_w_per_degree": None if recent is None else round(recent, 2),
-            "learned_baseline_w_per_degree": None if baseline is None else round(baseline, 2),
+            "method": "energy_signature",
+            "reason": view.reason,
+            "current_w_per_degree": rounded(current),
+            "learned_baseline_w_per_degree": rounded(expected),
             "deviation_percent": deviation_percent,
-            "baseline_learning_hours": round(self.runtime.baseline_hours[self.room.slug], 1),
-            "recent_observation_hours": round(self.runtime.recent_hours[self.room.slug], 1),
-            "recent_ready": self.runtime.recent_hours[self.room.slug]
-            >= HEAT_DEMAND_MIN_RECENT_HOURS,
-            "baseline_ready": self.runtime.baseline_hours[self.room.slug]
-            >= HEAT_DEMAND_MIN_BASELINE_HOURS,
+            "normal_range_w_per_degree": normal_range,
+            "z_score": rounded(view.z_score),
+            "valid_days": baseline.days,
+            "required_days": HEAT_DEMAND_MIN_VALID_DAYS,
+            "window_hours": HEAT_DEMAND_RECENT_WINDOW_HOURS,
+            "recent_observation_hours": round(recent.clean_hours, 1),
+            "recent_excluded_hours": round(recent.excluded_hours, 1),
+            "recent_energy_kwh": round(recent.energy_wh / 1000, 2),
+            "recent_mean_lift_c": rounded(recent.mean_lift, 1),
+            "recent_mean_wind_ms": rounded(recent.mean_wind, 1),
+            "compared_days": baseline.compared,
+            "compared_lift_range_c": (
+                None if baseline.lift_range is None else [round(v, 1) for v in baseline.lift_range]
+            ),
+            "compared_wind_range_ms": (
+                None if baseline.wind_range is None else [round(v, 1) for v in baseline.wind_range]
+            ),
+            "baseline_learning_hours": round(view.baseline_clean_hours, 1),
+            "recent_ready": current is not None,
+            "baseline_ready": expected is not None,
         }
+
+
+class HeatDemandPerDegreeSensor(OptimizerEntity, SensorEntity):
+    """The room's recent heat demand per degree of room/outdoor difference.
+
+    Estimated radiator energy over the last 48 hours divided by the
+    degree-hours between room and outdoor temperature (closed radiator counts
+    as zero output; external heat and open windows/doors are left out).
+    """
+
+    _attr_icon = "mdi:home-thermometer"
+    _attr_native_unit_of_measurement = "W/°C"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, runtime, room) -> None:
+        super().__init__(runtime, f"{room.slug}_heat_demand_per_degree", room=room)
+        self.room = room
+        self._attr_name = "Heat demand per degree"
+
+    @property
+    def available(self) -> bool:
+        view = self.runtime.demand_views.get(self.room.slug)
+        return bool(self.runtime.entry.options.get(CONF_OUTDOOR_TEMPERATURE, "")) and (
+            view is not None and view.recent_w_per_degree is not None
+        )
+
+    @property
+    def native_value(self):
+        view = self.runtime.demand_views.get(self.room.slug)
+        if view is None or view.recent_w_per_degree is None:
+            return None
+        return round(view.recent_w_per_degree, 3)
+
+    @property
+    def extra_state_attributes(self):
+        view = self.runtime.demand_views.get(self.room.slug)
+        expected = None if view is None else view.baseline.expected
+        return {"expected_w_per_degree": None if expected is None else round(expected, 3)}
 
 
 class TotalPowerSensor(OptimizerEntity, SensorEntity):

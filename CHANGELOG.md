@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.9.0
+
+- Replace the heat-demand model. Its learned baseline started from the very
+  first sample and, with a 120-hour half-life, kept most of that sample's
+  weight for weeks, so steady rooms were reported as `deviating` as soon as
+  learning finished.
+- Heat demand is now an energy balance: estimated radiator energy over the
+  last 48 hours divided by the room/outdoor degree-hours (W/°C). Closed
+  radiators count as zero output and the actual room temperature is used
+  instead of the target.
+- The status compares that value with the room's own completed days that had
+  similar weather (room/outdoor difference within 3 °C, then similar wind):
+  their median and robust spread, with hysteresis. It says why it is still
+  learning, including weather it has not seen yet, and a radiator that
+  normally idles is now normal instead of a division problem.
+- Add an optional wind speed sensor, used to prefer days with similar wind.
+- Leave external-heat and open window/door periods out for one extra hour, and
+  honour Better Thermostat's window/door state for every room.
+- Rebuild the energy balance from recorder history on the first start and for
+  new rooms.
+- Add a per-room "Heat demand per degree" sensor.
+- Report unavailable outdoor temperature and wind sensors as a data problem.
+- Register the hub device before the room devices that point at it (Home
+  Assistant rejects the reverse order from 2025.12).
+- Run the Home Assistant integration tests in CI.
+
 ## 1.8.2
 
 - Expose the climate entity, valve opening, room temperature, target,

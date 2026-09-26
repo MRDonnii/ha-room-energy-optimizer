@@ -12,7 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest ruff
+      # Home Assistant 2025.1 (the minimum in hacs.json) for the integration tests.
+      - run: pip install ruff "pytest-homeassistant-custom-component==0.13.205"
       - run: ruff check .
       - run: pytest -q
 
