@@ -123,6 +123,8 @@ class RuntimeData:
         self.contact_open: dict[str, bool] = {room.slug: False for room in self.rooms}
         self._stove_active: dict[str, bool] = {room.slug: False for room in self.rooms}
         self.listeners: list[Any] = []
+        # Registry id of the hub device the room devices link to.
+        self.hub_device_id: str | None = None
         self._last_sample: datetime | None = None
         self._month = dt_util.now().strftime("%Y-%m")
         self._store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}", atomic_writes=True)
@@ -537,7 +539,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_room_storage(hass, entry)
     # Room devices point at the hub via `via_device`, so the hub must exist
     # before the platforms add the first room entity.
-    dr.async_get(hass).async_get_or_create(
+    hub = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         name=f"{entry.title} (Totals)",
@@ -546,6 +548,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sw_version=VERSION,
     )
     runtime = RuntimeData(hass, entry)
+    runtime.hub_device_id = hub.id
     await runtime.async_start()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

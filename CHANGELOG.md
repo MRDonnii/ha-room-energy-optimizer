@@ -23,7 +23,9 @@
 - Add a per-room "Heat demand per degree" sensor.
 - Report unavailable outdoor temperature and wind sensors as a data problem.
 - Register the hub device before the room devices that point at it (Home
-  Assistant rejects the reverse order from 2025.12).
+  Assistant rejects the reverse order from 2025.12), and link them by
+  registry id on Home Assistant 2026.8 and later, where the identifier form
+  is deprecated.
 - Run the Home Assistant integration tests in CI.
 
 ## 1.8.2

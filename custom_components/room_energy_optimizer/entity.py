@@ -1,8 +1,13 @@
 """Shared entity base."""
 
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN, VERSION
+
+# Home Assistant 2026.8 links a device to its parent by registry id and
+# deprecates the identifier tuple; older versions only know the tuple.
+_VIA_DEVICE_ID = "via_device_id" in DeviceInfo.__annotations__
 
 
 class OptimizerEntity(Entity):
@@ -33,9 +38,12 @@ class OptimizerEntity(Entity):
                 name=room.name,
                 manufacturer="Room Energy Optimizer",
                 model="Room estimator",
-                via_device=(DOMAIN, runtime.entry.entry_id),
                 sw_version=VERSION,
             )
+            if _VIA_DEVICE_ID and runtime.hub_device_id:
+                self._attr_device_info["via_device_id"] = runtime.hub_device_id
+            else:
+                self._attr_device_info["via_device"] = (DOMAIN, runtime.entry.entry_id)
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.runtime.add_listener(self.async_write_ha_state))
