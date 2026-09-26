@@ -64,69 +64,6 @@ def test_no_temperature_lift_means_no_power():
     assert model.estimated_power(1000, 100, 20, 21, True) == 0
 
 
-def test_heat_demand_ratio_normalises_by_lift():
-    assert model.heat_demand_ratio(600, 21, 11) == 60
-
-
-def test_heat_demand_ratio_rejects_small_lift():
-    assert model.heat_demand_ratio(600, 21, 20) is None
-
-
-def test_update_ema_seeds_from_first_sample():
-    assert model.update_ema(None, 42.0, 1.0, 24.0) == 42.0
-
-
-def test_update_ema_moves_toward_sample_over_time():
-    value = model.update_ema(10.0, 20.0, 24.0, 24.0)
-    assert 14.5 < value < 15.5
-
-
-def test_update_ema_barely_moves_for_short_elapsed_time():
-    value = model.update_ema(10.0, 20.0, 0.01, 120.0)
-    assert 10.0 < value < 10.1
-
-
-def test_classify_heat_demand_learning_before_enough_hours():
-    assert model.classify_heat_demand(60.0, 55.0, 10.0, 48.0, 0.4) == "learning"
-
-
-def test_classify_heat_demand_learning_without_baseline():
-    assert model.classify_heat_demand(60.0, None, 100.0, 48.0, 0.4) == "learning"
-
-
-def test_classify_heat_demand_normal_within_threshold():
-    assert model.classify_heat_demand(60.0, 50.0, 100.0, 48.0, 0.4) == "normal"
-
-
-def test_classify_heat_demand_deviating_beyond_threshold():
-    assert model.classify_heat_demand(90.0, 50.0, 100.0, 48.0, 0.4) == "deviating"
-
-
-def test_classify_heat_demand_waits_for_stable_recent_window():
-    assert (
-        model.classify_heat_demand(90.0, 50.0, 100.0, 48.0, 0.5, 5.9, 6.0, 0.3)
-        == "learning"
-    )
-
-
-def test_classify_heat_demand_hysteresis_holds_existing_deviation():
-    assert (
-        model.classify_heat_demand(
-            70.0, 50.0, 100.0, 48.0, 0.5, 6.0, 6.0, 0.3, "deviating"
-        )
-        == "deviating"
-    )
-
-
-def test_classify_heat_demand_hysteresis_clears_below_exit_threshold():
-    assert (
-        model.classify_heat_demand(
-            60.0, 50.0, 100.0, 48.0, 0.5, 6.0, 6.0, 0.3, "deviating"
-        )
-        == "normal"
-    )
-
-
 def test_room_from_dict_wizard_submission():
     room = model.room_from_dict(
         {

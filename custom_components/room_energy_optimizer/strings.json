@@ -10,13 +10,15 @@
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
+          "wind_speed_entity": "Wind speed sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
           "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
+          "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
           "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
           "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
         }
@@ -50,7 +52,9 @@
       "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
       "invalid_sensor": "The optional sensor entity must start with sensor."
     },
-    "abort": {"already_configured": "Room Energy Optimizer is already configured."}
+    "abort": {
+      "already_configured": "Room Energy Optimizer is already configured."
+    }
   },
   "options": {
     "step": {
@@ -62,13 +66,15 @@
           "system_type": "Heating system",
           "flow_temperature_entity": "Flow temperature sensor",
           "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
+          "wind_speed_entity": "Wind speed sensor (optional)",
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
           "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
         },
         "data_description": {
-          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room.",
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
+          "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
           "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
           "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
         }
@@ -114,7 +120,9 @@
       },
       "select_room_to_edit": {
         "title": "Edit a room",
-        "data": {"room": "Room to edit"}
+        "data": {
+          "room": "Room to edit"
+        }
       },
       "edit_room": {
         "title": "Edit room",

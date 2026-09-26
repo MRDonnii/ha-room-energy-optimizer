@@ -26,6 +26,7 @@ from .const import (
     CONF_ROOM_SYSTEM_TYPE,
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
+    CONF_WIND_SPEED,
     DEFAULT_LOOP_DROP_PER_STATION,
     DOMAIN,
     SYSTEM_INHERIT,
@@ -54,6 +55,7 @@ def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Optional(
                 CONF_OUTDOOR_TEMPERATURE, default=defaults.get(CONF_OUTDOOR_TEMPERATURE, "")
             ): str,
+            vol.Optional(CONF_WIND_SPEED, default=defaults.get(CONF_WIND_SPEED, "")): str,
             vol.Optional(CONF_MONTHLY_COST, default=defaults.get(CONF_MONTHLY_COST, "")): str,
             vol.Optional(
                 CONF_MONTHLY_COST_BASELINE,
@@ -80,7 +82,12 @@ def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
 
 def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
     errors: dict[str, str] = {}
-    for key in (CONF_OUTDOOR_TEMPERATURE, CONF_MONTHLY_COST, CONF_MONTHLY_COST_BASELINE):
+    for key in (
+        CONF_OUTDOOR_TEMPERATURE,
+        CONF_WIND_SPEED,
+        CONF_MONTHLY_COST,
+        CONF_MONTHLY_COST_BASELINE,
+    ):
         entity_id = user_input.get(key, "").strip()
         if entity_id and not entity_id.startswith(("sensor.", "input_number.")):
             errors[key] = "invalid_sensor"

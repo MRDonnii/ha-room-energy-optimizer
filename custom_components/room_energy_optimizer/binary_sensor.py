@@ -2,7 +2,7 @@
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 
-from .const import CONF_FLOW_TEMPERATURE, DOMAIN
+from .const import CONF_FLOW_TEMPERATURE, CONF_OUTDOOR_TEMPERATURE, CONF_WIND_SPEED, DOMAIN
 from .entity import OptimizerEntity
 
 
@@ -47,7 +47,18 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
             or any(value is None for value in self.runtime.valves.values())
             or any(value is None for value in self.runtime.external_heat_active.values())
             or bool(unsupported_guards)
+            or bool(self._unavailable_weather_inputs())
         )
+
+    def _unavailable_weather_inputs(self) -> list[str]:
+        """Configured outdoor/wind sensors that currently give no reading."""
+        missing = []
+        for key in (CONF_OUTDOOR_TEMPERATURE, CONF_WIND_SPEED):
+            entity_id = self.runtime.entry.options.get(key, "")
+            state = self.hass.states.get(entity_id) if entity_id else None
+            if entity_id and (state is None or state.state in ("unknown", "unavailable")):
+                missing.append(entity_id)
+        return missing
 
     def _bt_guard_supported(self, room) -> bool:
         climate = self.hass.states.get(room.climate_entity)
@@ -71,6 +82,7 @@ class DataHealthSensor(OptimizerEntity, BinarySensorEntity):
                 for room in self.runtime.rooms
                 if room.better_thermostat_extension_enabled and not self._bt_guard_supported(room)
             ],
+            "unavailable_weather_inputs": self._unavailable_weather_inputs(),
         }
 
 
