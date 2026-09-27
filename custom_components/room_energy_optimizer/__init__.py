@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .alerts import StressPeriod, evaluate_stress
 from .const import (
+    CONF_ALERT_LANGUAGE,
     CONF_ALERT_NOTIFY_ENTITY,
     CONF_ALERT_OBSERVATION_MINUTES,
     CONF_FLOW_TEMPERATURE,
@@ -380,7 +381,8 @@ class RuntimeData:
             return
         deficit, rise = alert
         flow = self._flow_temperature()
-        if self.hass.config.language == "da":
+        language = self.entry.options.get(CONF_ALERT_LANGUAGE, "auto")
+        if language == "da" or (language == "auto" and self.hass.config.language == "da"):
             title = f"Radiator presset: {room.name}"
             message = (
                 f"Ventilen har været fuldt åben i {self.alert_minutes} min. "
