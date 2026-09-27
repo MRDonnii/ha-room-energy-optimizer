@@ -20,7 +20,7 @@ equipment. It reads Better Thermostat's public attributes and can optionally
 publish an external-heat learning guard. A cold room can therefore keep
 receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.9.1**
+**Current version: 1.9.2**
 
 ## What it provides
 
@@ -55,10 +55,11 @@ period.
 
 ### Optional radiator notifications
 
-Select a `notify` entity and observation time in the integration's Configure
-screen. The **Radiator stress notifications** switch appears on the integration's
-shared device. Notifications default to off and remain off until the switch is
-turned on. The switch state survives a restart.
+Select a `notify` entity in the integration's Configure screen. The **Radiator
+stress notifications** switch and **Radiator alert observation time** number
+appear on the integration's shared device. Set the number from 1 to 1440
+minutes. Notifications default to off until the switch is turned on. Both
+settings survive a restart.
 
 The integration sends at most one message per continuous stress period after
 the selected observation time. It requires the valve to remain at least 99%

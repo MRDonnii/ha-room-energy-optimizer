@@ -145,6 +145,7 @@ class RuntimeData:
     async def async_start(self) -> None:
         stored = await self._store.async_load() or {}
         self.alert_enabled = bool(stored.get("alert_enabled", False))
+        self.alert_minutes = int(stored.get("alert_minutes", self.alert_minutes))
         if stored.get("month") == self._month:
             self.hours.update(
                 {
@@ -410,6 +411,12 @@ class RuntimeData:
         for listener in list(self.listeners):
             listener()
 
+    async def async_set_alert_minutes(self, minutes: int) -> None:
+        self.alert_minutes = minutes
+        await self._store.async_save(self._data_to_save())
+        for listener in list(self.listeners):
+            listener()
+
     def _sample_demand(
         self,
         room: RoomConfig,
@@ -570,6 +577,7 @@ class RuntimeData:
     def _data_to_save(self) -> dict[str, Any]:
         return {
             "alert_enabled": self.alert_enabled,
+            "alert_minutes": self.alert_minutes,
             "heat_demand_model_version": HEAT_DEMAND_MODEL_VERSION,
             "month": self._month,
             "hours": self.hours,

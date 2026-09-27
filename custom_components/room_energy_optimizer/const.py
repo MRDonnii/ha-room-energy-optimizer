@@ -1,8 +1,8 @@
 """Constants for Room Energy Optimizer."""
 
 DOMAIN = "room_energy_optimizer"
-PLATFORMS = ["sensor", "binary_sensor", "switch"]
-VERSION = "1.9.1"
+PLATFORMS = ["sensor", "binary_sensor", "switch", "number"]
+VERSION = "1.9.2"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"

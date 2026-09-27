@@ -73,6 +73,35 @@ async def setup_entry(hass: HomeAssistant, **extra) -> MockConfigEntry:
     return entry
 
 
+async def test_alert_controls_persist(hass: HomeAssistant) -> None:
+    set_weather(hass)
+    set_climate(hass, 100)
+    entry = await setup_entry(hass, alert_notify_entity="notify.test")
+    registry = er.async_get(hass)
+    switch_id = registry.async_get_entity_id(
+        "switch", DOMAIN, f"{entry.entry_id}_radiator_stress_notifications"
+    )
+    number_id = registry.async_get_entity_id(
+        "number", DOMAIN, f"{entry.entry_id}_radiator_alert_observation_time"
+    )
+    assert switch_id and number_id
+    assert hass.states.get(switch_id).state == "off"
+    assert float(hass.states.get(number_id).state) == 60
+    await hass.services.async_call(
+        "number", "set_value", {"value": 45}, target={"entity_id": number_id}, blocking=True
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", target={"entity_id": switch_id}, blocking=True
+    )
+    assert float(hass.states.get(number_id).state) == 45
+    assert hass.states.get(switch_id).state == "on"
+    assert hass.states.get("binary_sensor.kontor_radiator_stressed") is not None
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert float(hass.states.get(number_id).state) == 45
+    assert hass.states.get(switch_id).state == "on"
+
+
 async def test_learns_the_recent_window_live(hass: HomeAssistant, freezer) -> None:
     set_weather(hass)
     set_climate(hass, 50)
