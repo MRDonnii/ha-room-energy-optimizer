@@ -12,6 +12,7 @@ CONF_MONTHLY_COST = "monthly_cost_entity"
 CONF_MONTHLY_COST_BASELINE = "monthly_cost_baseline_entity"
 CONF_ROOMS = "rooms"
 CONF_ALERT_NOTIFY_ENTITY = "alert_notify_entity"
+CONF_ALERT_LANGUAGE = "alert_language"
 CONF_ALERT_OBSERVATION_MINUTES = "alert_observation_minutes"
 DEFAULT_ALERT_OBSERVATION_MINUTES = 60
 CONF_EXTERNAL_HEAT_ENTITIES = "external_heat_entities"

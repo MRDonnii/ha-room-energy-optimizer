@@ -6,6 +6,8 @@
   clear name in Home Assistant installations using English as the core language.
 - Expose the radiator-alert observation time as a persistent number entity, so
   it can be changed directly from dashboards and automations.
+- Allow the notification language to follow Home Assistant or be set to Danish
+  or English for the chosen recipient.
 
 ## 1.9.1
 

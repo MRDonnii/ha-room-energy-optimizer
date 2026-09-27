@@ -17,6 +17,7 @@ from homeassistant.const import CONF_NAME
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ALERT_LANGUAGE,
     CONF_ALERT_NOTIFY_ENTITY,
     CONF_FLOW_TEMPERATURE,
     CONF_LOOP_DROP_PER_STATION,
@@ -85,6 +86,15 @@ def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
                 if defaults.get(CONF_ALERT_NOTIFY_ENTITY)
                 else vol.Optional(CONF_ALERT_NOTIFY_ENTITY)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
+            vol.Required(
+                CONF_ALERT_LANGUAGE, default=defaults.get(CONF_ALERT_LANGUAGE, "auto")
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=["auto", "da", "en"],
+                    translation_key=CONF_ALERT_LANGUAGE,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
         }
     )
 

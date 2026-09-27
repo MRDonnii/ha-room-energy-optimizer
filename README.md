@@ -55,7 +55,8 @@ period.
 
 ### Optional radiator notifications
 
-Select a `notify` entity in the integration's Configure screen. The **Radiator
+Select a `notify` entity and message language in the integration's Configure
+screen. The **Radiator
 stress notifications** switch and **Radiator alert observation time** number
 appear on the integration's shared device. Set the number from 1 to 1440
 minutes. Notifications default to off until the switch is turned on. Both

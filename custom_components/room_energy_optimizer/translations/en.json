@@ -15,7 +15,8 @@
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
           "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
-          "alert_notify_entity": "Radiator alert recipient (optional)"
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_language": "Notification language"
         },
         "data_description": {
           "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
@@ -74,7 +75,8 @@
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
           "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
-          "alert_notify_entity": "Radiator alert recipient (optional)"
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_language": "Notification language"
         },
         "data_description": {
           "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
@@ -154,6 +156,13 @@
     }
   },
   "selector": {
+    "alert_language": {
+      "options": {
+        "auto": "Follow Home Assistant",
+        "da": "Danish",
+        "en": "English"
+      }
+    },
     "system_type": {
       "options": {
         "one_pipe": "One-pipe system",

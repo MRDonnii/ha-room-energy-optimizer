@@ -15,7 +15,8 @@
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
           "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)",
-          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)"
+          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)",
+          "alert_language": "Sprog for notifikationer"
         },
         "data_description": {
           "outdoor_temperature_entity": "Slår varmebehovsstatus til for hvert rum: de seneste 48 timers estimerede radiatorenergi pr. grads forskel mellem inde og ude, sammenlignet med rummets egne døgn.",
@@ -74,7 +75,8 @@
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
           "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)",
-          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)"
+          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)",
+          "alert_language": "Sprog for notifikationer"
         },
         "data_description": {
           "outdoor_temperature_entity": "Slår varmebehovsstatus til for hvert rum: de seneste 48 timers estimerede radiatorenergi pr. grads forskel mellem inde og ude, sammenlignet med rummets egne døgn.",
@@ -154,6 +156,13 @@
     }
   },
   "selector": {
+    "alert_language": {
+      "options": {
+        "auto": "Følg Home Assistant",
+        "da": "Dansk",
+        "en": "Engelsk"
+      }
+    },
     "system_type": {
       "options": {
         "one_pipe": "Et-strengsanlæg",
