@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.2
+
+- Include the English runtime translation so the notification switch has a
+  clear name in Home Assistant installations using English as the core language.
+- Expose the radiator-alert observation time as a persistent number entity, so
+  it can be changed directly from dashboards and automations.
+
 ## 1.9.1
 
 - Add optional radiator-stress notifications with a configurable notify entity

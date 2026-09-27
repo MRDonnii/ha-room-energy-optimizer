@@ -15,16 +15,14 @@
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
           "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)",
-          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)",
-          "alert_observation_minutes": "Observationstid for radiatoradvarsler"
+          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)"
         },
         "data_description": {
           "outdoor_temperature_entity": "Slår varmebehovsstatus til for hvert rum: de seneste 48 timers estimerede radiatorenergi pr. grads forskel mellem inde og ude, sammenlignet med rummets egne døgn.",
           "wind_speed_entity": "Lader varmebehovsstatus lære, hvor meget vind øger det enkelte rums varmebehov. Bruges kun, når rummets historik viser en tydelig vindeffekt.",
           "loop_order": "Én station pr. linje, i fysisk gennemløbsrækkefølge: enten et navn alene, eller \"navn|rum_slug\" for at knytte stationen til et konfigureret rum (slug'en er rumnavnet med små bogstaver og understreger i stedet for mellemrum). Et rum med flere radiatorer i slyngen får én linje pr. radiator med samme slug. Bruges kun af de diagnostiske \"eksperimentel kaskade\"-sensorer - det er rummets eget felt \"Varmeanlæg, undtagelse\" ovenfor der reelt ændrer hovedberegningen.",
           "loop_drop_per_station_c": "Ukalibreret antagelse der kun bruges af de diagnostiske \"eksperimentel kaskade\"-sensorer - intet i integrationen måler det reelle temperaturfald pr. radiator.",
-          "alert_notify_entity": "Vælg en notify-entitet. Beskeder er slået fra, indtil integrationens kontakt Radiatoradvarsler tændes.",
-          "alert_observation_minutes": "Højst én besked pr. sammenhængende periode, hvis rummet stadig er mere end 0,3 °C under målet og er steget mindre end 0,2 °C."
+          "alert_notify_entity": "Vælg en notify-entitet. Beskeder er slået fra, indtil integrationens kontakt Radiatoradvarsler tændes."
         }
       },
       "add_room": {
@@ -76,16 +74,14 @@
           "monthly_cost_baseline_entity": "Baseline-entitet for månedspris (valgfri)",
           "loop_order": "Rækkefølge i 1-strengs-slyngen (valgfri)",
           "loop_drop_per_station_c": "Antaget temperaturfald pr. station (eksperimentel)",
-          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)",
-          "alert_observation_minutes": "Observationstid for radiatoradvarsler"
+          "alert_notify_entity": "Modtager af radiatoradvarsler (valgfri)"
         },
         "data_description": {
           "outdoor_temperature_entity": "Slår varmebehovsstatus til for hvert rum: de seneste 48 timers estimerede radiatorenergi pr. grads forskel mellem inde og ude, sammenlignet med rummets egne døgn.",
           "wind_speed_entity": "Lader varmebehovsstatus lære, hvor meget vind øger det enkelte rums varmebehov. Bruges kun, når rummets historik viser en tydelig vindeffekt.",
           "loop_order": "Én station pr. linje, i fysisk gennemløbsrækkefølge: enten et navn alene, eller \"navn|rum_slug\" for at knytte stationen til et konfigureret rum (slug'en er rumnavnet med små bogstaver og understreger i stedet for mellemrum). Et rum med flere radiatorer i slyngen får én linje pr. radiator med samme slug. Bruges kun af de diagnostiske \"eksperimentel kaskade\"-sensorer - det er rummets eget felt \"Varmeanlæg, undtagelse\" ovenfor der reelt ændrer hovedberegningen.",
           "loop_drop_per_station_c": "Ukalibreret antagelse der kun bruges af de diagnostiske \"eksperimentel kaskade\"-sensorer - intet i integrationen måler det reelle temperaturfald pr. radiator.",
-          "alert_notify_entity": "Vælg en notify-entitet. Beskeder er slået fra, indtil integrationens kontakt Radiatoradvarsler tændes.",
-          "alert_observation_minutes": "Højst én besked pr. sammenhængende periode, hvis rummet stadig er mere end 0,3 °C under målet og er steget mindre end 0,2 °C."
+          "alert_notify_entity": "Vælg en notify-entitet. Beskeder er slået fra, indtil integrationens kontakt Radiatoradvarsler tændes."
         }
       },
       "manage_rooms": {
@@ -181,6 +177,9 @@
     }
   },
   "entity": {
+    "number": {
+      "radiator_alert_observation_time": {"name": "Observationstid for radiatoradvarsler"}
+    },
     "switch": {
       "radiator_stress_notifications": {"name": "Radiatoradvarsler"}
     },
