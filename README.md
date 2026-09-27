@@ -20,7 +20,7 @@ equipment. It reads Better Thermostat's public attributes and can optionally
 publish an external-heat learning guard. A cold room can therefore keep
 receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.9.0**
+**Current version: 1.9.1**
 
 ## What it provides
 
@@ -51,8 +51,22 @@ more than 0.3 °C below its target. Its attributes include the climate entity,
 valve opening, current and target temperatures, temperature deficit and the
 configured flow temperature. Automations can use the values captured on the
 state transition to compare temperature progress over their own observation
-period; the integration itself does not send notifications or impose a fixed
-observation time.
+period.
+
+### Optional radiator notifications
+
+Select a `notify` entity and observation time in the integration's Configure
+screen. The **Radiator stress notifications** switch appears on the integration's
+shared device. Notifications default to off and remain off until the switch is
+turned on. The switch state survives a restart.
+
+The integration sends at most one message per continuous stress period after
+the selected observation time. It requires the valve to remain at least 99%
+open, the room to remain more than 0.3 °C below target, and the temperature
+to have risen less than 0.2 °C. Monitoring continues when messages are off.
+An alert from an older user-created automation is independent of this switch;
+disable or remove that automation when moving its notifications into the
+integration.
 
 ## Heat demand status (optional)
 

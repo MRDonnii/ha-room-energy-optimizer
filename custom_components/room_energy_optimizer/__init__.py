@@ -15,7 +15,10 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .alerts import StressPeriod, evaluate_stress
 from .const import (
+    CONF_ALERT_NOTIFY_ENTITY,
+    CONF_ALERT_OBSERVATION_MINUTES,
     CONF_FLOW_TEMPERATURE,
     CONF_LOOP_DROP_PER_STATION,
     CONF_LOOP_ORDER,
@@ -23,6 +26,7 @@ from .const import (
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
     CONF_WIND_SPEED,
+    DEFAULT_ALERT_OBSERVATION_MINUTES,
     DEFAULT_LOOP_DROP_PER_STATION,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -129,9 +133,18 @@ class RuntimeData:
         self._month = dt_util.now().strftime("%Y-%m")
         self._store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}", atomic_writes=True)
         self._unsub = None
+        self.alert_notify_entity = entry.options.get(CONF_ALERT_NOTIFY_ENTITY, "")
+        self.alert_minutes = int(
+            entry.options.get(CONF_ALERT_OBSERVATION_MINUTES, DEFAULT_ALERT_OBSERVATION_MINUTES)
+        )
+        self.alert_enabled = False
+        self._stress_periods: dict[str, StressPeriod | None] = {
+            room.slug: None for room in self.rooms
+        }
 
     async def async_start(self) -> None:
         stored = await self._store.async_load() or {}
+        self.alert_enabled = bool(stored.get("alert_enabled", False))
         if stored.get("month") == self._month:
             self.hours.update(
                 {
@@ -340,8 +353,60 @@ class RuntimeData:
                 now_ts, HEAT_DEMAND_RECENT_WINDOW_HOURS, HEAT_DEMAND_KEEP_DAYS
             )
             self.demand_views[room.slug] = self._evaluate_demand(room, now)
+            await self._check_radiator_alert(room, state, current, now)
         self._last_sample = now
         self._store.async_delay_save(self._data_to_save, 300)
+        for listener in list(self.listeners):
+            listener()
+
+    async def _check_radiator_alert(self, room, state, valve, now: datetime) -> None:
+        try:
+            current = float(state.attributes["current_temperature"])
+            target = float(state.attributes["temperature"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            current = target = None
+        period, alert = evaluate_stress(
+            self._stress_periods[room.slug],
+            now=now,
+            valve=valve,
+            current=current,
+            target=target,
+            minutes=self.alert_minutes,
+            enabled=self.alert_enabled and bool(self.alert_notify_entity),
+        )
+        self._stress_periods[room.slug] = period
+        if alert is None:
+            return
+        deficit, rise = alert
+        flow = self._flow_temperature()
+        if self.hass.config.language == "da":
+            title = f"Radiator presset: {room.name}"
+            message = (
+                f"Ventilen har været fuldt åben i {self.alert_minutes} min. "
+                f"Underskud: {deficit} °C, temperaturstigning: {rise} °C, "
+                f"fremløb: {flow if flow is not None else 'ukendt'} °C."
+            )
+        else:
+            title = f"Radiator stressed: {room.name}"
+            message = (
+                f"The valve has been fully open for {self.alert_minutes} minutes. "
+                f"Temperature deficit: {deficit} °C; rise: {rise} °C; "
+                f"flow: {flow if flow is not None else 'unknown'} °C."
+            )
+        try:
+            await self.hass.services.async_call(
+                "notify",
+                "send_message",
+                {"title": title, "message": message},
+                blocking=True,
+                target={"entity_id": self.alert_notify_entity},
+            )
+        except Exception:
+            _LOGGER.exception("Could not send radiator-stress notification for %s", room.name)
+
+    async def async_set_alert_enabled(self, enabled: bool) -> None:
+        self.alert_enabled = enabled
+        await self._store.async_save(self._data_to_save())
         for listener in list(self.listeners):
             listener()
 
@@ -504,6 +569,7 @@ class RuntimeData:
 
     def _data_to_save(self) -> dict[str, Any]:
         return {
+            "alert_enabled": self.alert_enabled,
             "heat_demand_model_version": HEAT_DEMAND_MODEL_VERSION,
             "month": self._month,
             "hours": self.hours,

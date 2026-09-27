@@ -17,6 +17,8 @@ from homeassistant.const import CONF_NAME
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ALERT_NOTIFY_ENTITY,
+    CONF_ALERT_OBSERVATION_MINUTES,
     CONF_FLOW_TEMPERATURE,
     CONF_LOOP_DROP_PER_STATION,
     CONF_LOOP_ORDER,
@@ -27,6 +29,7 @@ from .const import (
     CONF_ROOMS,
     CONF_SYSTEM_TYPE,
     CONF_WIND_SPEED,
+    DEFAULT_ALERT_OBSERVATION_MINUTES,
     DEFAULT_LOOP_DROP_PER_STATION,
     DOMAIN,
     SYSTEM_INHERIT,
@@ -76,6 +79,25 @@ def _settings_schema(defaults: dict[str, Any]) -> vol.Schema:
                     unit_of_measurement="°C",
                 )
             ),
+            (
+                vol.Optional(
+                    CONF_ALERT_NOTIFY_ENTITY,
+                    default=defaults[CONF_ALERT_NOTIFY_ENTITY],
+                )
+                if defaults.get(CONF_ALERT_NOTIFY_ENTITY)
+                else vol.Optional(CONF_ALERT_NOTIFY_ENTITY)
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
+            vol.Required(
+                CONF_ALERT_OBSERVATION_MINUTES,
+                default=defaults.get(
+                    CONF_ALERT_OBSERVATION_MINUTES, DEFAULT_ALERT_OBSERVATION_MINUTES
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=1440, step=1, mode=selector.NumberSelectorMode.BOX,
+                    unit_of_measurement="min",
+                )
+            ),
         }
     )
 
@@ -91,6 +113,9 @@ def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
         entity_id = user_input.get(key, "").strip()
         if entity_id and not entity_id.startswith(("sensor.", "input_number.")):
             errors[key] = "invalid_sensor"
+    notify_entity = user_input.get(CONF_ALERT_NOTIFY_ENTITY, "")
+    if notify_entity and not notify_entity.startswith("notify."):
+        errors[CONF_ALERT_NOTIFY_ENTITY] = "invalid_notify"
     return errors
 
 

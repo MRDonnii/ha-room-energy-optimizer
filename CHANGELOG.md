@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.1
+
+- Add optional radiator-stress notifications with a configurable notify entity
+  and observation time.
+- Add a persistent switch on the integration device to turn these messages on
+  and off without disabling radiator monitoring. Notifications default to off.
+- Limit each continuous stress period to one message and require insufficient
+  temperature progress after the observation interval.
+
 ## 1.9.0
 
 - Replace the heat-demand model. Its learned baseline started from the very

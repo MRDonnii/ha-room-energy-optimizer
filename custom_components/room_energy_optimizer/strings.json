@@ -14,13 +14,17 @@
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
-          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_observation_minutes": "Radiator alert observation time"
         },
         "data_description": {
           "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
           "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
           "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
-          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop.",
+          "alert_notify_entity": "Choose a notify entity. Alerts remain off until you turn on the integration's Radiator stress notifications switch.",
+          "alert_observation_minutes": "Send at most one alert per sustained stress period if the room remains over 0.3 °C below target and has risen less than 0.2 °C."
         }
       },
       "add_room": {
@@ -50,7 +54,8 @@
     },
     "error": {
       "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
-      "invalid_sensor": "The optional sensor entity must start with sensor."
+      "invalid_sensor": "The optional sensor entity must start with sensor.",
+      "invalid_notify": "Choose a notify entity."
     },
     "abort": {
       "already_configured": "Room Energy Optimizer is already configured."
@@ -70,13 +75,17 @@
           "monthly_cost_entity": "Monthly heating cost sensor (optional)",
           "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
           "loop_order": "One-pipe loop order (optional)",
-          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)"
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_observation_minutes": "Radiator alert observation time"
         },
         "data_description": {
           "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
           "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
           "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
-          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop."
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop.",
+          "alert_notify_entity": "Choose a notify entity. Alerts remain off until you turn on the integration's Radiator stress notifications switch.",
+          "alert_observation_minutes": "Send at most one alert per sustained stress period if the room remains over 0.3 °C below target and has risen less than 0.2 °C."
         }
       },
       "manage_rooms": {
@@ -144,7 +153,8 @@
     },
     "error": {
       "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
-      "invalid_sensor": "The optional sensor entity must start with sensor."
+      "invalid_sensor": "The optional sensor entity must start with sensor.",
+      "invalid_notify": "Choose a notify entity."
     }
   },
   "selector": {
@@ -171,6 +181,9 @@
     }
   },
   "entity": {
+    "switch": {
+      "radiator_stress_notifications": {"name": "Radiator stress notifications"}
+    },
     "sensor": {
       "heat_demand_status": {
         "state": {
