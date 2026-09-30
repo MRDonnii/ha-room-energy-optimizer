@@ -9,8 +9,10 @@ from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -611,6 +613,33 @@ async def _async_migrate_room_storage(hass: HomeAssistant, entry: ConfigEntry) -
     hass.config_entries.async_update_entry(entry, options=new_options)
 
 
+@callback
+def _async_remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove registry entries for entities this configuration no longer creates.
+
+    Better Thermostat and cascade sensors exist only for the rooms that use them,
+    but older versions created them for every room and nothing removed them again,
+    so they stayed behind as permanently unavailable entities.
+    """
+    platforms = [
+        platform
+        for platform in entity_platform.async_get_platforms(hass, DOMAIN)
+        if platform.config_entry is entry
+    ]
+    # Every platform always creates at least one entity. If one is missing, its setup
+    # failed and its entities must not be mistaken for stale ones.
+    if {platform.domain for platform in platforms if platform.entities} != set(PLATFORMS):
+        return
+    live = {
+        entity.unique_id for platform in platforms for entity in platform.entities.values()
+    }
+    registry = er.async_get(hass)
+    for registered in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if registered.unique_id not in live and registered.disabled_by is None:
+            _LOGGER.info("Removing entity %s that is no longer created", registered.entity_id)
+            registry.async_remove(registered.entity_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_room_storage(hass, entry)
     # Room devices point at the hub via `via_device`, so the hub must exist
@@ -628,6 +657,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await runtime.async_start()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _async_remove_stale_entities(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
 

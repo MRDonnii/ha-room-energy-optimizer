@@ -1,6 +1,7 @@
 """Home Assistant tests for the heat demand runtime (model v3)."""
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -230,3 +231,99 @@ async def test_room_devices_link_to_the_hub(hass: HomeAssistant) -> None:
     room = registry.async_get_device(identifiers={(DOMAIN, f"{entry.entry_id}_kontor")})
     assert hub is not None
     assert room.via_device_id == hub.id
+
+
+def add_leftover(hass: HomeAssistant, entry: MockConfigEntry, domain: str, key: str, **extra):
+    return er.async_get(hass).async_get_or_create(
+        domain, DOMAIN, f"{entry.entry_id}_{key}", config_entry=entry, **extra
+    )
+
+
+async def test_entities_older_versions_left_behind_are_removed(hass: HomeAssistant) -> None:
+    set_weather(hass)
+    set_climate(hass, 50)
+    entry = MockConfigEntry(domain=DOMAIN, title="Test", unique_id="main", options=options())
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    stale = [
+        add_leftover(hass, entry, "binary_sensor", "kontor_external_heat"),
+        add_leftover(hass, entry, "binary_sensor", "kontor_opening_contact"),
+        add_leftover(hass, entry, "sensor", "kontor_experimental_cascade_power"),
+    ]
+    hidden = add_leftover(
+        hass,
+        entry,
+        "binary_sensor",
+        "kontor_external_heat_hidden",
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    current = add_leftover(hass, entry, "sensor", "kontor_power")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    for leftover in stale:
+        assert registry.async_get(leftover.entity_id) is None
+        assert hass.states.get(leftover.entity_id) is None
+    assert registry.async_get(hidden.entity_id) is not None
+    assert registry.async_get(current.entity_id) is not None
+    assert not hass.states.get(current.entity_id).attributes.get("restored")
+
+
+async def test_leftovers_stay_when_a_platform_fails_to_set_up(hass: HomeAssistant) -> None:
+    set_weather(hass)
+    set_climate(hass, 50)
+    entry = MockConfigEntry(domain=DOMAIN, title="Test", unique_id="main", options=options())
+    entry.add_to_hass(hass)
+    leftover = add_leftover(hass, entry, "binary_sensor", "kontor_external_heat")
+
+    with patch(
+        "custom_components.room_energy_optimizer.sensor.async_setup_entry",
+        side_effect=RuntimeError("platform failed"),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert er.async_get(hass).async_get(leftover.entity_id) is not None
+
+
+async def test_entities_for_bt_and_cascade_rooms_are_kept(hass: HomeAssistant) -> None:
+    set_weather(hass)
+    set_climate(hass, 50)
+    room = {**ROOM, "better_thermostat_extension_enabled": True}
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test",
+        unique_id="main",
+        options=options(system_type="one_pipe", loop_order="Kontor|kontor", rooms=[room]),
+    )
+    entry.add_to_hass(hass)
+    kept = [
+        add_leftover(hass, entry, "binary_sensor", "kontor_external_heat"),
+        add_leftover(hass, entry, "binary_sensor", "kontor_opening_contact"),
+        add_leftover(hass, entry, "sensor", "kontor_experimental_cascade_power"),
+    ]
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for registered in kept:
+        assert registry.async_get(registered.entity_id) is not None
+        assert not hass.states.get(registered.entity_id).attributes.get("restored")
+
+
+async def test_entities_of_a_removed_room_are_removed(hass: HomeAssistant) -> None:
+    set_weather(hass)
+    set_climate(hass, 50)
+    living = {**ROOM, "name": "Stue", "climate_entity": "climate.living"}
+    entry = await setup_entry(hass, rooms=[ROOM, living])
+    registry = er.async_get(hass)
+    valve = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_stue_valve")
+    assert valve is not None
+
+    hass.config_entries.async_update_entry(entry, options=options(rooms=[ROOM]))
+    await hass.async_block_till_done()
+
+    assert registry.async_get(valve) is None
+    assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_kontor_valve")

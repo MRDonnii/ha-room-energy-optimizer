@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.3
+
+- Remove entities that this configuration no longer creates. Older versions
+  created the Better Thermostat sensors (external heat, opening contact) and
+  the experimental cascade sensor for every room, and nothing removed them
+  once they were created only where used, so they stayed behind as permanently
+  unavailable entities. The integration now removes such leftovers when it
+  starts, and the entities of a room that is removed in the options. Entities
+  the user has disabled are kept, and nothing is removed if one of the
+  platforms failed to set up. (Fix by Claude AI.)
+
 ## 1.9.2
 
 - Include the English runtime translation so the notification switch has a
