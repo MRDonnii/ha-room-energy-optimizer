@@ -20,7 +20,7 @@ equipment. It reads Better Thermostat's public attributes and can optionally
 publish an external-heat learning guard. A cold room can therefore keep
 receiving radiator heat while unreliable learning samples are discarded.
 
-**Current version: 1.9.2**
+**Current version: 1.9.3**
 
 ## What it provides
 
