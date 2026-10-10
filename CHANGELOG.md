@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.4
+
+- Radiator alerts sent to a phone (a mobile app notify entity) carry their own
+  icon: they go through the phone's `notify.mobile_app_*` service with
+  `notification_icon: mdi:radiator` and a red colour, so iOS shows them as a
+  communication notification with a radiator avatar instead of the Home
+  Assistant icon. Other notify entities still get `notify.send_message`.
+  (Change by Claude AI.)
+
 ## 1.9.3
 
 - Remove entities that this configuration no longer creates. Older versions

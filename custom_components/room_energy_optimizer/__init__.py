@@ -16,9 +16,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .alerts import StressPeriod, evaluate_stress
 from .const import (
+    ALERT_NOTIFY_COLOR,
+    ALERT_NOTIFY_ICON,
     CONF_ALERT_LANGUAGE,
     CONF_ALERT_NOTIFY_ENTITY,
     CONF_ALERT_OBSERVATION_MINUTES,
@@ -399,15 +402,53 @@ class RuntimeData:
                 f"flow: {flow if flow is not None else 'unknown'} °C."
             )
         try:
-            await self.hass.services.async_call(
-                "notify",
-                "send_message",
-                {"title": title, "message": message},
-                blocking=True,
-                target={"entity_id": self.alert_notify_entity},
-            )
+            service = self._mobile_app_service(self.alert_notify_entity)
+            if service:
+                # A phone gets the radiator icon (on iOS a communication notification
+                # with its own avatar instead of the Home Assistant icon).
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "title": title,
+                        "message": message,
+                        "data": {
+                            "tag": f"room_energy_optimizer_stress_{room.slug}",
+                            "notification_icon": ALERT_NOTIFY_ICON,
+                            "notification_icon_color": "white",
+                            "color": ALERT_NOTIFY_COLOR,
+                        },
+                    },
+                    blocking=True,
+                )
+            else:
+                await self.hass.services.async_call(
+                    "notify",
+                    "send_message",
+                    {"title": title, "message": message},
+                    blocking=True,
+                    target={"entity_id": self.alert_notify_entity},
+                )
         except Exception:
             _LOGGER.exception("Could not send radiator-stress notification for %s", room.name)
+
+    def _mobile_app_service(self, entity_id: str) -> str | None:
+        """The legacy mobile_app notify service behind a phone's notify entity.
+
+        notify.send_message only carries a title and a message, so a phone target is
+        sent through its notify.mobile_app_* service to give it an icon.
+        """
+        entry = er.async_get(self.hass).async_get(entity_id)
+        if entry is None or entry.platform != "mobile_app":
+            return None
+        names = [entity_id.split(".", 1)[1]]
+        device = dr.async_get(self.hass).async_get(entry.device_id) if entry.device_id else None
+        if device is not None:
+            names.insert(0, slugify(device.name_by_user or device.name or ""))
+        for name in names:
+            if name and self.hass.services.has_service("notify", f"mobile_app_{name}"):
+                return f"mobile_app_{name}"
+        return None
 
     async def async_set_alert_enabled(self, enabled: bool) -> None:
         self.alert_enabled = enabled

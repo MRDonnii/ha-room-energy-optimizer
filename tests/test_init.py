@@ -327,3 +327,23 @@ async def test_entities_of_a_removed_room_are_removed(hass: HomeAssistant) -> No
 
     assert registry.async_get(valve) is None
     assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_kontor_valve")
+
+
+async def test_phone_alert_goes_through_mobile_app_with_icon(hass: HomeAssistant) -> None:
+    """A phone's notify entity is sent through notify.mobile_app_* so it can carry an icon."""
+    set_weather(hass)
+    set_climate(hass, 100)
+    phone = MockConfigEntry(domain="mobile_app", title="JTH-iPhone")
+    phone.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=phone.entry_id, identifiers={("mobile_app", "phone")}, name="JTH-iPhone"
+    )
+    er.async_get(hass).async_get_or_create(
+        "notify", "mobile_app", "phone", suggested_object_id="jth_iphone", device_id=device.id
+    )
+    calls = []
+    hass.services.async_register("notify", "mobile_app_jth_iphone", lambda call: calls.append(call))
+    entry = await setup_entry(hass, alert_notify_entity="notify.jth_iphone")
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    assert runtime._mobile_app_service("notify.jth_iphone") == "mobile_app_jth_iphone"
+    assert runtime._mobile_app_service("notify.test") is None
