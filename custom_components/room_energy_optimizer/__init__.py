@@ -14,11 +14,14 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .alerts import StressPeriod, evaluate_stress
+from .bt_guard import RESCAN_INTERVAL as GUARD_RESCAN_INTERVAL
+from .bt_guard import LearningGuard
 from .const import (
     ALERT_NOTIFY_COLOR,
     ALERT_NOTIFY_ICON,
@@ -700,7 +703,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _async_remove_stale_entities(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+    _async_start_learning_guard(hass, entry, runtime)
     return True
+
+
+@callback
+def _async_start_learning_guard(hass: HomeAssistant, entry: ConfigEntry, runtime) -> None:
+    """Guard Better Thermostat learning in rooms with the extension enabled."""
+    rooms = [room for room in runtime.rooms if room.better_thermostat_extension_enabled]
+    if not rooms:
+        return
+    registry = er.async_get(hass)
+
+    def guards() -> dict[str, str | None]:
+        return {
+            room.climate_entity: registry.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry.entry_id}_{room.slug}_external_heat"
+            )
+            for room in rooms
+        }
+
+    guard = LearningGuard(hass, guards)
+    entry.async_on_unload(guard.async_stop)
+    entry.async_on_unload(async_track_time_interval(hass, guard.async_scan, GUARD_RESCAN_INTERVAL))
+    entry.async_on_unload(async_at_started(hass, guard.async_scan))
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

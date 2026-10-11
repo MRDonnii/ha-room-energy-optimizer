@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.10.0
+
+- Built-in Better Thermostat learning guard. Rooms with the Better Thermostat
+  extension enabled now pause Better Thermostat's thermal learning while
+  external heat (heat pump, stove, …) is active, and publish
+  `thermal_learning_paused` / `external_heat_entity_id` on the climate.
+  Previously this needed a separate guard that was never published, so Data
+  problem reported `better_thermostat_guard_unsupported` for everyone else.
+- Supports Better Thermostat 1.x and 2.x (2.0 renamed the trackers'
+  `start_temp`/`end_temp` to `start_temperature`/`end_temperature`).
+- A climate that is already guarded (e.g. by a stand-alone guard) is left
+  alone. (Change by Claude AI.)
+
 ## 1.9.4
 
 - Radiator alerts sent to a phone (a mobile app notify entity) carry their own

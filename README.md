@@ -126,9 +126,15 @@ target temperatures are left untouched. Better Thermostat's debounced
 `window_open` and `door_open` attributes are mirrored automatically, and
 open-contact periods are excluded from baseline learning too.
 
-Pausing Better Thermostat's internal learner requires a compatible Better
-Thermostat build exposing `thermal_learning_paused`. Data problem reports a
-missing hook explicitly instead of silently claiming that learning is paused.
+Since 1.10.0 the integration pauses Better Thermostat's own thermal learning
+(heating power and heat loss) itself while external heat is active, without
+changing any Better Thermostat file. It works with Better Thermostat 1.x and
+2.x. The guarded climate gets the attributes `thermal_learning_paused` and
+`external_heat_entity_id`. Regulation, setpoints and already learned values
+are never touched; only the cycle in progress is dropped. If a future Better
+Thermostat release renames the internals the guard relies on, the guard does
+not attach, logs a warning, and Data problem lists the room under
+`better_thermostat_guard_unsupported`.
 
 ## Installation with HACS
 
