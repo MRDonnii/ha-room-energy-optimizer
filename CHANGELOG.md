@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.11.0
+
+- A setpoint change is learning, not a deviation. Raising the setpoint made
+  the heat-up (the radiator also warming walls and furniture) count as high
+  demand, and lowering it made the cool-down count as low demand, so a room
+  could show "deviating" right after the temperature was changed. Now a change
+  of at least 0.5 °C starts a transition: until the room is within 0.3 °C of
+  its new target (at most 12 h) and two hours after that, its samples are left
+  out of the energy balance and the status is `learning` with the reason
+  `setpoint_changed` (attributes `setpoint_transition`,
+  `setpoint_transition_since`). Afterwards the room is judged afresh.
+- Recorder history is replayed with the same rule (the climate's `temperature`
+  attribute is now part of the replay), and a running transition survives a
+  restart. (Change by Claude AI; the user: "hvis temperatur setpoint ændres så
+  skal den også justere og se det som en indlæring".)
+
 ## 1.10.0
 
 - Built-in Better Thermostat learning guard. Rooms with the Better Thermostat

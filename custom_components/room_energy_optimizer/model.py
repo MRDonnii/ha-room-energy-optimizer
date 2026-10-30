@@ -572,6 +572,83 @@ class ExclusionTail:
         return self.until is None or when >= self.until
 
 
+class SetpointTransition:
+    """Keep a room's samples out while it moves to a new setpoint.
+
+    Raising the setpoint makes the radiator heat the room and its walls up;
+    lowering it closes the radiator while the room cools down. Neither is the
+    room's normal demand, so from a change of at least `min_change` (compared
+    with the last setpoint it settled on, so small steps add up) until the room
+    is within `tolerance` of the new target, at most `max_hours`, and
+    `tail_hours` after that, `update` returns True: the sample is left out and
+    the room shows as learning.
+    """
+
+    def __init__(
+        self, min_change: float, tolerance: float, max_hours: float, tail_hours: float
+    ) -> None:
+        self.min_change = min_change
+        self.tolerance = tolerance
+        self.max_seconds = max_hours * 3600
+        self.tail_seconds = tail_hours * 3600
+        self.target: float | None = None
+        self.since: float | None = None
+        self.settled_at: float | None = None
+
+    @property
+    def active(self) -> bool:
+        return self.since is not None
+
+    def update(self, when: float, target: float | None, current: float | None) -> bool:
+        """Feed the setpoint and room temperature at `when`; True while in transition."""
+        if target is not None:
+            if self.target is None:
+                self.target = target
+            elif abs(target - self.target) >= self.min_change - 1e-9:
+                self.target = target
+                self.since = when
+                self.settled_at = None
+        if self.since is None:
+            return False
+        if self.settled_at is None and (
+            (current is not None and abs(current - self.target) <= self.tolerance + 1e-9)
+            or when - self.since >= self.max_seconds
+        ):
+            self.settled_at = when
+        if self.settled_at is not None and when >= self.settled_at + self.tail_seconds:
+            self.since = None
+            self.settled_at = None
+            return False
+        return True
+
+    def to_list(self) -> list[float | None]:
+        return [self.target, self.since, self.settled_at]
+
+    def restore(self, values: Any) -> None:
+        """Take over a stored [target, since, settled_at]; damaged data is ignored."""
+        if not isinstance(values, list) or len(values) != 3:
+            return
+        try:
+            target, since, settled = (None if value is None else float(value) for value in values)
+        except (TypeError, ValueError):
+            return
+        self.target, self.since, self.settled_at = target, since, settled
+        if self.since is None:
+            self.settled_at = None
+
+
+def setpoint_and_temperature(attributes: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """A climate's target and current temperature, None when missing."""
+
+    def number(key: str) -> float | None:
+        try:
+            return float(attributes[key])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    return number("temperature"), number("current_temperature")
+
+
 def contact_open(attributes: Mapping[str, Any]) -> bool:
     """Better Thermostat's debounced window/door state."""
     return bool(attributes.get("window_open", False) or attributes.get("door_open", False))

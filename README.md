@@ -81,8 +81,9 @@ sensors:
   output, so a room that heats longer or shorter than usual changes the value.
 - **Heat demand status** with three states:
   - `learning` - not enough data yet (the `reason` attribute says why:
-    fewer than seven valid days, an incomplete 48-hour window, or weather too
-    mild for a meaningful ratio);
+    fewer than seven valid days, an incomplete 48-hour window, weather too
+    mild for a meaningful ratio, or `setpoint_changed` while the room moves to
+    a new setpoint);
   - `normal` - the recent value lies within the room's own normal spread;
   - `deviating` - it lies more than three robust standard deviations from the
     room's normal, and stays so until it is back within two.
@@ -101,12 +102,22 @@ below 10 % of the normal or 5 W of average output. Samples taken while
 external heat is active or a window/door is open - and for one hour
 afterwards - are left out.
 
+A setpoint change of at least 0.5 °C is a transition, not a deviation:
+heating up to a higher setpoint also warms walls and furniture, and after a
+lower one the radiator stays closed while the room cools. From the change
+until the room is within 0.3 °C of its new target (at most 12 hours), and two
+hours after that, the samples are left out and the status is `learning` with
+the reason `setpoint_changed`; the attributes `setpoint_transition` and
+`setpoint_transition_since` show it. Afterwards the room is judged afresh.
+Recorder history is replayed with the same rule, and a transition that is
+running when Home Assistant restarts carries on.
+
 On the first start of 1.9.0, and for rooms added later, the energy balance is
 rebuilt from up to 10 days of recorder history, so the status is available
 immediately when enough history exists.
 
 A sustained `deviating` state can indicate a stuck valve, a window or door left
-open, air in the radiator, a changed setpoint, or a miscalibrated rated
+open, air in the radiator, or a miscalibrated rated
 power/area value. The numbers are estimates from valve opening, flow
 temperature and rated radiator output, not heat-meter readings; they are best
 used to compare a room with itself over time.

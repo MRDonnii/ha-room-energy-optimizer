@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfArea, UnitOfPower
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_FLOW_TEMPERATURE,
@@ -308,6 +309,13 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
             "baseline_learning_hours": round(view.baseline_clean_hours, 1),
             "recent_ready": current is not None,
             "baseline_ready": expected is not None,
+            # The room is moving to a new setpoint; its samples are kept out until it is there.
+            "setpoint_transition": view.setpoint_since is not None,
+            "setpoint_transition_since": (
+                None
+                if view.setpoint_since is None
+                else dt_util.utc_from_timestamp(view.setpoint_since).isoformat()
+            ),
         }
 
 

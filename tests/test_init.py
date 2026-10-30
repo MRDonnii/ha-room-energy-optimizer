@@ -46,13 +46,20 @@ def options(**extra):
     }
 
 
-def set_climate(hass: HomeAssistant, valve: float, *, window_open: bool = False) -> None:
+def set_climate(
+    hass: HomeAssistant,
+    valve: float,
+    *,
+    window_open: bool = False,
+    current: float = 21.0,
+    target: float = 21.0,
+) -> None:
     hass.states.async_set(
         "climate.office",
         "heat",
         {
-            "current_temperature": 21.0,
-            "temperature": 21.0,
+            "current_temperature": current,
+            "temperature": target,
             "hvac_action": "heating" if valve else "idle",
             "window_open": window_open,
             "calibration_balance": {"climate.office_trv": {"valve%": valve}},
@@ -347,3 +354,80 @@ async def test_phone_alert_goes_through_mobile_app_with_icon(hass: HomeAssistant
     runtime = hass.data[DOMAIN][entry.entry_id]
     assert runtime._mobile_app_service("notify.jth_iphone") == "mobile_app_jth_iphone"
     assert runtime._mobile_app_service("notify.test") is None
+
+
+async def tick(hass: HomeAssistant, freezer, minutes: int) -> None:
+    for _ in range(minutes // 5):
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+
+async def test_setpoint_change_is_learning_not_a_deviation(hass: HomeAssistant, freezer) -> None:
+    """Raising the setpoint: the heat-up is left out and shown as learning (reason)."""
+    set_weather(hass)
+    set_climate(hass, 40, current=20.0, target=20.0)
+    await setup_entry(hass)
+    await tick(hass, freezer, 60)
+
+    set_climate(hass, 100, current=20.0, target=22.0)
+    await tick(hass, freezer, 3 * 60)
+    status = hass.states.get("sensor.kontor_heat_demand_status")
+    assert status.state == "learning"
+    assert status.attributes["reason"] == "setpoint_changed"
+    assert status.attributes["setpoint_transition"] is True
+    excluded = status.attributes["recent_excluded_hours"]
+    assert excluded == pytest.approx(3.0, abs=0.2)
+
+    # Reached: two more hours of tail, then the room is judged again.
+    set_climate(hass, 40, current=21.9, target=22.0)
+    await tick(hass, freezer, 2 * 60 + 10)
+    status = hass.states.get("sensor.kontor_heat_demand_status")
+    assert status.attributes["setpoint_transition"] is False
+    assert status.attributes["reason"] != "setpoint_changed"
+    # The 2 h setpoint tail, then the general 1 h exclusion tail has just started (10 min).
+    assert status.attributes["recent_excluded_hours"] == pytest.approx(excluded + 2.2, abs=0.1)
+
+
+async def test_setpoint_transition_survives_a_restart(hass: HomeAssistant, freezer) -> None:
+    set_weather(hass)
+    set_climate(hass, 40, current=20.0, target=20.0)
+    entry = await setup_entry(hass)
+    await tick(hass, freezer, 30)
+    set_climate(hass, 100, current=20.0, target=22.0)
+    await tick(hass, freezer, 30)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    status = hass.states.get("sensor.kontor_heat_demand_status")
+    assert status.attributes["reason"] == "setpoint_changed"
+
+
+async def test_replayed_heat_up_is_not_a_deviation(recorder_mock, hass: HomeAssistant, freezer):
+    """History with a setpoint raise: the heat-up hours are left out of the replay too."""
+    from pytest_homeassistant_custom_component.components.recorder.common import (
+        async_wait_recording_done,
+    )
+
+    now = dt_util.utcnow().replace(minute=30, second=0, microsecond=0)
+    freezer.move_to(now - timedelta(days=10, hours=2))
+    set_weather(hass)
+    for hour in range(10 * 24 + 2):
+        if 10 * 24 - 20 <= hour < 10 * 24 - 14:
+            # Six hours of heating up to a new setpoint with the valve wide open.
+            set_climate(hass, 100, current=20.0 + (hour - (10 * 24 - 20)) * 0.3, target=22.0)
+        elif hour >= 10 * 24 - 14:
+            set_climate(hass, 60 if hour % 2 == 0 else 0, current=22.0, target=22.0)
+        else:
+            set_climate(hass, 60 if hour % 2 == 0 else 0, current=20.0, target=20.0)
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(hours=1))
+    await async_wait_recording_done(hass)
+
+    freezer.move_to(now)
+    await setup_entry(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    status = hass.states.get("sensor.kontor_heat_demand_status")
+    assert status.state != "deviating"
+    assert status.attributes["recent_excluded_hours"] >= 6.0

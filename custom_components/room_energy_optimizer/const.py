@@ -2,7 +2,7 @@
 
 DOMAIN = "room_energy_optimizer"
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number"]
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"
@@ -55,6 +55,15 @@ HEAT_DEMAND_KEEP_DAYS = 45
 HEAT_DEMAND_MIN_VALID_DAYS = 7
 HEAT_DEMAND_MIN_DAY_CLEAN_HOURS = 12.0
 HEAT_DEMAND_EXCLUSION_TAIL_HOURS = 1.0
+# A setpoint change of at least this much starts a transition: until the room is within the
+# tolerance of its new target (at most the max hours) and a tail after that, its samples are
+# kept out of the balance and the room shows "learning" (reason "setpoint_changed"). Heating
+# up to a higher setpoint also warms walls and furniture, and after a lower one the radiator
+# stays closed while the room cools; neither is the room's normal demand. Claude AI, 2026-10-30.
+HEAT_DEMAND_SETPOINT_MIN_CHANGE_C = 0.5
+HEAT_DEMAND_SETPOINT_TOLERANCE_C = 0.3
+HEAT_DEMAND_SETPOINT_MAX_HOURS = 12.0
+HEAT_DEMAND_SETPOINT_TAIL_HOURS = 2.0
 # The recent window is compared with the learned days whose weather was most
 # like it: room/outdoor difference within a few degrees, then similar wind.
 # That keeps the seasonal rise in W/°C (free heat from people, appliances and

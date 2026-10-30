@@ -257,3 +257,68 @@ def test_demand_sample_needs_valve_and_temperatures():
     power, lift = model.demand_sample(1000, False, 50.0, 50.0, 21.0, 5.0)
     assert power > 0
     assert lift == 16.0
+
+
+def transition():
+    return model.SetpointTransition(0.5, 0.3, 12.0, 2.0)
+
+
+def test_setpoint_transition_starts_on_a_real_change_only():
+    t = transition()
+    assert t.update(BASE, 21.0, 21.0) is False  # the first setpoint is the reference
+    assert t.update(BASE + HOUR, 21.3, 21.0) is False  # a small step is no transition
+    assert t.active is False
+    assert t.update(BASE + 2 * HOUR, 21.6, 21.0) is True  # small steps add up (0.6 °C)
+    assert t.active is True
+
+
+def test_setpoint_transition_lasts_until_reached_plus_tail():
+    t = transition()
+    t.update(BASE, 20.0, 20.0)
+    assert t.update(BASE + HOUR, 22.0, 20.1) is True
+    assert t.update(BASE + 3 * HOUR, 22.0, 21.5) is True  # still heating up
+    assert t.update(BASE + 4 * HOUR, 22.0, 21.8) is True  # reached (within 0.3 °C), tail starts
+    assert t.update(BASE + 5 * HOUR, 22.0, 22.0) is True  # in the 2 h tail
+    assert t.update(BASE + 6 * HOUR, 22.0, 22.0) is False  # done
+    assert t.active is False
+
+
+def test_setpoint_transition_works_downwards_and_is_capped():
+    t = transition()
+    t.update(BASE, 22.0, 22.0)
+    assert t.update(BASE + HOUR, 18.0, 22.0) is True
+    # Never reaches 18 °C: after 12 h it counts as settled, then the 2 h tail.
+    assert t.update(BASE + 12 * HOUR, 18.0, 20.5) is True
+    assert t.update(BASE + 13 * HOUR, 18.0, 20.4) is True
+    assert t.update(BASE + 15 * HOUR, 18.0, 20.3) is False
+
+
+def test_setpoint_transition_restarts_on_a_new_change():
+    t = transition()
+    t.update(BASE, 20.0, 20.0)
+    t.update(BASE + HOUR, 22.0, 20.0)
+    t.update(BASE + 3 * HOUR, 22.0, 22.0)  # reached, tail running
+    assert t.update(BASE + 4 * HOUR, 20.0, 22.0) is True  # back down: a new transition
+    assert t.since == BASE + 4 * HOUR and t.settled_at is None
+
+
+def test_setpoint_transition_ignores_missing_values_and_round_trips():
+    t = transition()
+    t.update(BASE, 20.0, 20.0)
+    t.update(BASE + HOUR, 22.0, None)
+    assert t.update(BASE + 2 * HOUR, None, None) is True  # unavailable keeps the state
+    copy = transition()
+    copy.restore(t.to_list())
+    assert copy.to_list() == t.to_list() and copy.active
+    damaged = transition()
+    damaged.restore(["x", 1, 2])
+    damaged.restore({"target": 1})
+    assert damaged.to_list() == [None, None, None]
+
+
+def test_setpoint_and_temperature_reads_a_climate():
+    assert model.setpoint_and_temperature({"temperature": "22", "current_temperature": 21.5}) == (
+        22.0,
+        21.5,
+    )
+    assert model.setpoint_and_temperature({"temperature": None}) == (None, None)

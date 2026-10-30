@@ -41,6 +41,10 @@ from .const import (
     DOMAIN,
     HEAT_DEMAND_BACKFILL_DAYS,
     HEAT_DEMAND_EXCLUSION_TAIL_HOURS,
+    HEAT_DEMAND_SETPOINT_MAX_HOURS,
+    HEAT_DEMAND_SETPOINT_MIN_CHANGE_C,
+    HEAT_DEMAND_SETPOINT_TAIL_HOURS,
+    HEAT_DEMAND_SETPOINT_TOLERANCE_C,
     HEAT_DEMAND_HISTORY_DAYS,
     HEAT_DEMAND_KEEP_DAYS,
     HEAT_DEMAND_MAX_SIMILAR_DAYS,
@@ -68,6 +72,7 @@ from .model import (
     DemandTotals,
     ExclusionTail,
     RoomConfig,
+    SetpointTransition,
     StepSeries,
     cascade_flow_temperature,
     classify_demand,
@@ -80,6 +85,7 @@ from .model import (
     room_one_pipe,
     room_to_dict,
     rooms_from_options,
+    setpoint_and_temperature,
     valve_percentage,
     wind_speed_ms,
 )
@@ -90,6 +96,7 @@ _LOGGER = logging.getLogger(__name__)
 _REPLAY_ATTRIBUTES = (
     "calibration_balance",
     "current_temperature",
+    "temperature",
     "window_open",
     "door_open",
     "hvac_action",
@@ -107,6 +114,7 @@ class DemandView:
     baseline: DemandBaseline
     z_score: float | None
     baseline_clean_hours: float
+    setpoint_since: float | None = None
 
 
 class RuntimeData:
@@ -131,6 +139,7 @@ class RuntimeData:
         self._tails = {
             room.slug: ExclusionTail(HEAT_DEMAND_EXCLUSION_TAIL_HOURS) for room in self.rooms
         }
+        self._setpoints = {room.slug: _setpoint_transition() for room in self.rooms}
         self.external_heat_active: dict[str, bool | None] = {room.slug: None for room in self.rooms}
         self.external_heat_sources: dict[str, list[str]] = {room.slug: [] for room in self.rooms}
         self.contact_open: dict[str, bool] = {room.slug: False for room in self.rooms}
@@ -171,6 +180,10 @@ class RuntimeData:
             for slug, data in stored.get("demand", {}).items():
                 if slug in self.demand:
                     self.demand[slug] = DemandModel.from_dict(data)
+        # A transition that was running when Home Assistant stopped keeps going.
+        for slug, values in (stored.get("setpoints") or {}).items():
+            if slug in self._setpoints:
+                self._setpoints[slug].restore(values)
         backfill_until = dt_util.utcnow()
         await self.async_update()
         self._unsub = async_track_time_interval(
@@ -294,9 +307,16 @@ class RuntimeData:
             z_enter=HEAT_DEMAND_Z_ENTER,
             z_exit=HEAT_DEMAND_Z_EXIT,
         )
+        transition = self._setpoints[room.slug]
+        if transition.active:
+            # Moving to a new setpoint is learning, not a deviation; afterwards the room is
+            # judged afresh (entering "deviating" again needs the full z_enter).
+            status, z_score = "learning", None
         model.status = status
         reason = None
-        if len(learned) < HEAT_DEMAND_MIN_VALID_DAYS:
+        if transition.active:
+            reason = "setpoint_changed"
+        elif len(learned) < HEAT_DEMAND_MIN_VALID_DAYS:
             reason = "collecting_days"
         elif recent_value is None:
             lift = recent.mean_lift
@@ -316,6 +336,7 @@ class RuntimeData:
             baseline,
             z_score,
             sum(bucket.clean_hours for _, bucket in days),
+            transition.since,
         )
 
     async def async_update(self, _now: datetime | None = None) -> None:
@@ -342,6 +363,9 @@ class RuntimeData:
             self.external_heat_sources[room.slug] = sources
             opened = contact_open(attributes)
             self.contact_open[room.slug] = bool(room.better_thermostat_extension_enabled and opened)
+            setpoint_moving = self._setpoints[room.slug].update(
+                now_ts, *setpoint_and_temperature(attributes)
+            )
             previous = self.valves.get(room.slug)
             if previous is not None and elapsed_hours:
                 self.hours[room.slug] += previous / 100.0 * elapsed_hours
@@ -357,7 +381,7 @@ class RuntimeData:
                     attributes,
                     outdoor,
                     wind,
-                    excluded=external_heat is not False or opened,
+                    excluded=external_heat is not False or opened or setpoint_moving,
                 )
             self.demand[room.slug].prune(
                 now_ts, HEAT_DEMAND_RECENT_WINDOW_HOURS, HEAT_DEMAND_KEEP_DAYS
@@ -587,6 +611,7 @@ class RuntimeData:
 
         models = {room.slug: DemandModel() for room in rooms}
         tails = {room.slug: ExclusionTail(HEAT_DEMAND_EXCLUSION_TAIL_HOURS) for room in rooms}
+        setpoints = {room.slug: _setpoint_transition() for room in rooms}
         stoves = {room.slug: False for room in rooms}
         zone = dt_util.get_default_time_zone()
         step = float(DEFAULT_SCAN_INTERVAL)
@@ -605,6 +630,9 @@ class RuntimeData:
                 external_heat, _, stoves[room.slug] = evaluate_external_heat(
                     room, lookup, stoves[room.slug]
                 )
+                setpoint_moving = setpoints[room.slug].update(
+                    when, *setpoint_and_temperature(attributes)
+                )
                 self._sample_demand(
                     room,
                     when,
@@ -615,7 +643,9 @@ class RuntimeData:
                     attributes,
                     outdoor,
                     wind,
-                    excluded=external_heat is not False or contact_open(attributes),
+                    excluded=external_heat is not False
+                    or contact_open(attributes)
+                    or setpoint_moving,
                     model=models[room.slug],
                     tail=tails[room.slug],
                 )
@@ -630,6 +660,7 @@ class RuntimeData:
             "month": self._month,
             "hours": self.hours,
             "demand": {room.slug: self.demand[room.slug].to_dict() for room in self.rooms},
+            "setpoints": {room.slug: self._setpoints[room.slug].to_list() for room in self.rooms},
         }
 
     def add_listener(self, listener: Any) -> Any:
@@ -640,6 +671,15 @@ class RuntimeData:
         if self._unsub is not None:
             self._unsub()
         await self._store.async_save(self._data_to_save())
+
+
+def _setpoint_transition() -> SetpointTransition:
+    return SetpointTransition(
+        HEAT_DEMAND_SETPOINT_MIN_CHANGE_C,
+        HEAT_DEMAND_SETPOINT_TOLERANCE_C,
+        HEAT_DEMAND_SETPOINT_MAX_HOURS,
+        HEAT_DEMAND_SETPOINT_TAIL_HOURS,
+    )
 
 
 async def _async_migrate_room_storage(hass: HomeAssistant, entry: ConfigEntry) -> None:
