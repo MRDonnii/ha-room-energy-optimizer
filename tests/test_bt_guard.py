@@ -6,22 +6,21 @@ Thermostat 1.9.3, tests/bt_trackers_v2 the same file from 2.0.0-Beta-1.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
 
+import homeassistant.util.dt as dt_util
+import pytest
 from homeassistant.components.climate import ClimateEntity, HVACAction, HVACMode
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import DATA_ENTITY_PLATFORM, EntityPlatform
-import homeassistant.util.dt as dt_util
-import pytest
 
 from custom_components.room_energy_optimizer.bt_guard import (
     ATTR_GUARD,
     ATTR_PAUSED,
     LearningGuard,
 )
-
 from tests.bt_trackers import thermal_learning as v1
 from tests.bt_trackers_v2 import thermal_learning as v2
 

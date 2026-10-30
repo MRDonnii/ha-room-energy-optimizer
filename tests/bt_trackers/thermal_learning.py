@@ -7,10 +7,10 @@ via frozen *Result* dataclasses.
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import logging
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:

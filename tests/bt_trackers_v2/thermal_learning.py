@@ -6,11 +6,11 @@ the caller has to act on is handed back in frozen *Result* dataclasses.
 
 from __future__ import annotations
 
+import logging
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import logging
-import math
 from typing import TypedDict
 
 from homeassistant.components.climate.const import HVACAction

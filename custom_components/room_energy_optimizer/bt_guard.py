@@ -23,12 +23,12 @@ problem sensor reports it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import timedelta
 import functools
 import inspect
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.const import STATE_OFF
