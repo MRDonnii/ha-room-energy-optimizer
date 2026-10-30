@@ -322,3 +322,82 @@ def test_setpoint_and_temperature_reads_a_climate():
         21.5,
     )
     assert model.setpoint_and_temperature({"temperature": None}) == (None, None)
+
+
+def test_days_with_other_heat_are_not_compared_with_days_without():
+    """A stove day needs less radiator heat; a day without fire is compared with its kind."""
+    days = [model.DemandDay(10.0, 8.0, None, 0.3) for _ in range(7)] + [
+        model.DemandDay(20.0, 8.0, None, 0.0) for _ in range(6)
+    ]
+    options = dict(
+        min_days=7, max_lift_diff=3.0, wind_scale=2.0, min_similar=5, max_similar=10,
+        min_relative_spread=0.1, min_spread_w=5.0, max_share_diff=0.15, share_scale=0.1,
+    )
+    no_fire = model.learn_demand_baseline(days, 8.0, None, excluded_share=0.0, **options)
+    assert no_fire.expected == 20.0 and no_fire.share_range == (0.0, 0.0)
+    fire = model.learn_demand_baseline(days, 8.0, None, excluded_share=0.3, **options)
+    assert fire.expected == 10.0
+    # Weather like it but conditions never seen: not judged, and the reason can tell.
+    odd = model.learn_demand_baseline(days, 8.0, None, excluded_share=0.7, **options)
+    assert odd.expected is None and odd.weather_compared == 13
+
+
+def test_a_few_watts_on_an_idle_radiator_is_not_a_deviation():
+    """30 W more in a room that normally needs ~0 W was +400 % but means nothing."""
+    days = [model.DemandDay(0.1 * (i % 3), 11.0, None, 0.0) for i in range(10)]
+    options = dict(
+        min_days=7, max_lift_diff=3.0, wind_scale=2.0, min_similar=5, max_similar=10,
+        min_relative_spread=0.1,
+    )
+    old = model.learn_demand_baseline(days, 11.0, None, min_spread_w=5.0, **options)
+    new = model.learn_demand_baseline(days, 11.0, None, min_spread_w=60.0, **options)
+    recent = 30.0 / 11.0
+    assert classify(recent, old)[0] == "deviating"
+    assert classify(recent, new)[0] == "normal"
+    # A radiator suddenly running 600 W (window ajar, stuck valve) is still caught.
+    assert classify(600.0 / 11.0, new)[0] == "deviating"
+
+
+def confirm(raw, previous, pending, now):
+    return model.confirm_status(
+        raw, previous, pending, now, enter_seconds=12 * HOUR, exit_seconds=3 * HOUR
+    )
+
+
+def test_deviating_must_last_twelve_hours():
+    status, pending = confirm("deviating", "normal", None, BASE)
+    assert status == "normal" and pending == ("deviating", BASE)
+    status, pending = confirm("deviating", status, pending, BASE + 11 * HOUR)
+    assert status == "normal"
+    status, pending = confirm("deviating", status, pending, BASE + 12 * HOUR)
+    assert status == "deviating" and pending is None
+
+
+def test_an_interrupted_deviation_starts_over():
+    status, pending = confirm("deviating", "normal", None, BASE)
+    status, pending = confirm("normal", status, pending, BASE + 6 * HOUR)
+    assert status == "normal" and pending is None
+    status, pending = confirm("deviating", status, pending, BASE + 7 * HOUR)
+    status, pending = confirm("deviating", status, pending, BASE + 18 * HOUR)
+    assert status == "normal"  # only 11 h since it came back
+    assert confirm("deviating", status, pending, BASE + 19 * HOUR)[0] == "deviating"
+
+
+def test_deviating_clears_after_three_hours_and_learning_is_immediate():
+    status, pending = confirm("normal", "deviating", None, BASE)
+    assert status == "deviating"
+    status, pending = confirm("normal", status, pending, BASE + 3 * HOUR)
+    assert status == "normal" and pending is None
+    assert confirm("learning", "normal", None, BASE) == ("learning", None)
+    assert confirm("normal", "learning", None, BASE) == ("normal", None)
+    # From learning straight to a deviation still needs the twelve hours.
+    assert confirm("deviating", "learning", None, BASE) == ("normal", ("deviating", BASE))
+
+
+def test_pending_status_survives_storage():
+    m = model.DemandModel()
+    m.status, m.pending = "normal", ("deviating", float(BASE))
+    copy = model.DemandModel.from_dict(m.to_dict())
+    assert copy.pending == ("deviating", float(BASE))
+    damaged = model.DemandModel.from_dict({"status": "normal", "pending": ["x", "y"]})
+    assert damaged.pending is None

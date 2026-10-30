@@ -340,6 +340,17 @@ class DemandTotals:
     def mean_wind(self) -> float | None:
         return self.wind_ms_hours / self.wind_hours if self.wind_hours > 0 else None
 
+    @property
+    def excluded_share(self) -> float | None:
+        """Share of the observed time kept out (other heat, open window/door, new setpoint)."""
+        total = self.clean_hours + self.excluded_hours
+        return self.excluded_hours / total if total > 0 else None
+
+    @property
+    def average_w(self) -> float | None:
+        """Mean estimated radiator output over the clean time."""
+        return self.energy_wh / self.clean_hours if self.clean_hours > 0 else None
+
     def w_per_degree(self, min_clean_hours: float, min_mean_lift: float) -> float | None:
         """Estimated radiator heat per degree of room/outdoor difference (W/°C)."""
         lift = self.mean_lift
@@ -385,6 +396,10 @@ class DemandBaseline:
     spread: float | None = None
     lift_range: tuple[float, float] | None = None
     wind_range: tuple[float, float] | None = None
+    share_range: tuple[float, float] | None = None
+    # Days with similar weather before the other-heat filter: when there are enough of those
+    # but too few with similar conditions, the conditions (not the weather) are unusual.
+    weather_compared: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,6 +409,7 @@ class DemandDay:
     w_per_degree: float
     lift: float
     wind: float | None
+    excluded_share: float | None = None
 
 
 def learn_demand_baseline(
@@ -408,33 +424,54 @@ def learn_demand_baseline(
     max_similar: int,
     min_relative_spread: float,
     min_spread_w: float,
+    excluded_share: float | None = None,
+    max_share_diff: float | None = None,
+    share_scale: float = 0.1,
 ) -> DemandBaseline:
     """Learn a room's normal W/°C from its days with the most similar weather.
 
     Days count as comparable when their mean room/outdoor difference is within
-    `max_lift_diff` of the recent one; the closest are chosen, with wind as a
-    tie-breaker (`wind_scale` m/s weighs as much as 1 °C). The normal is their
-    median and the spread their robust standard deviation (MAD), never below
-    `min_relative_spread` of the normal or `min_spread_w` of average output.
+    `max_lift_diff` of the recent one and - when `max_share_diff` is given -
+    the share of time kept out for other heat or an opening is within
+    `max_share_diff` of the recent share. The closest are chosen, with wind and
+    that share as tie-breakers (`wind_scale` m/s and `share_scale` weigh as
+    much as 1 °C). The normal is their median and the spread their robust
+    standard deviation (MAD), never below `min_relative_spread` of the normal
+    or `min_spread_w` of average output.
     """
     if len(days) < min_days or lift is None or lift <= 0:
         return DemandBaseline(len(days))
+    use_share = max_share_diff is not None and excluded_share is not None
 
     def distance(day: DemandDay) -> float:
         wind_part = 0.0 if wind is None or day.wind is None else abs(day.wind - wind) / wind_scale
-        return abs(day.lift - lift) + wind_part
+        share_part = (
+            abs(day.excluded_share - excluded_share) / share_scale
+            if use_share and day.excluded_share is not None
+            else 0.0
+        )
+        return abs(day.lift - lift) + wind_part + share_part
 
-    similar = sorted((day for day in days if abs(day.lift - lift) <= max_lift_diff), key=distance)[
-        :max_similar
-    ]
+    weather = [day for day in days if abs(day.lift - lift) <= max_lift_diff]
+    if use_share:
+        alike = [
+            day
+            for day in weather
+            if day.excluded_share is None
+            or abs(day.excluded_share - excluded_share) <= max_share_diff
+        ]
+    else:
+        alike = weather
+    similar = sorted(alike, key=distance)[:max_similar]
     if len(similar) < min_similar:
-        return DemandBaseline(len(days), len(similar))
+        return DemandBaseline(len(days), len(similar), weather_compared=len(weather))
     values = [day.w_per_degree for day in similar]
     expected = statistics.median(values)
     mad = statistics.median(abs(value - expected) for value in values)
     spread = max(1.4826 * mad, min_relative_spread * expected, min_spread_w / lift)
     lifts = [day.lift for day in similar]
     winds = [day.wind for day in similar if day.wind is not None]
+    shares = [day.excluded_share for day in similar if day.excluded_share is not None]
     return DemandBaseline(
         len(days),
         len(similar),
@@ -442,6 +479,8 @@ def learn_demand_baseline(
         spread,
         (min(lifts), max(lifts)),
         (min(winds), max(winds)) if winds else None,
+        (min(shares), max(shares)) if shares else None,
+        len(weather),
     )
 
 
@@ -466,6 +505,35 @@ def classify_demand(
     return ("deviating" if abs(z_score) > z_enter else "normal"), z_score
 
 
+def confirm_status(
+    raw: str,
+    previous: str,
+    pending: tuple[str, float] | None,
+    now: float,
+    *,
+    enter_seconds: float,
+    exit_seconds: float,
+) -> tuple[str, tuple[str, float] | None]:
+    """Debounce entering and leaving "deviating"; return (status, pending).
+
+    `raw` is this evaluation's verdict, `previous` the confirmed status and
+    `pending` a (status, since) candidate. "deviating" only shows after the raw
+    verdict has said so for `enter_seconds` (meanwhile the room shows
+    "normal"), and only clears after `exit_seconds` of not deviating. Changes
+    to and from "learning" otherwise take effect at once.
+    """
+    if raw == previous:
+        return previous, None
+    if raw == "deviating" or previous == "deviating":
+        needed = enter_seconds if raw == "deviating" else exit_seconds
+        since = pending[1] if pending is not None and pending[0] == raw else now
+        if now - since >= needed:
+            return raw, None
+        shown = previous if previous == "deviating" else "normal"
+        return shown, (raw, since)
+    return raw, None
+
+
 class DemandModel:
     """Hourly and daily energy-balance history of one room."""
 
@@ -473,6 +541,8 @@ class DemandModel:
         self.hours: dict[int, DemandTotals] = {}
         self.days: dict[str, DemandTotals] = {}
         self.status = "learning"
+        # A status waiting to be confirmed: (status, since epoch).
+        self.pending: tuple[str, float] | None = None
 
     @property
     def empty(self) -> bool:
@@ -532,6 +602,7 @@ class DemandModel:
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status,
+            "pending": list(self.pending) if self.pending else None,
             "hours": {str(key): bucket.to_list() for key, bucket in self.hours.items()},
             "days": {key: bucket.to_list() for key, bucket in self.days.items()},
         }
@@ -543,6 +614,14 @@ class DemandModel:
             return model
         if data.get("status") in DEMAND_STATUSES:
             model.status = data["status"]
+        pending = data.get("pending")
+        if (
+            isinstance(pending, list)
+            and len(pending) == 2
+            and pending[0] in DEMAND_STATUSES
+            and isinstance(pending[1], (int, float))
+        ):
+            model.pending = (pending[0], float(pending[1]))
         for key, values in (data.get("hours") or {}).items():
             try:
                 model.hours[int(key)] = DemandTotals.from_list(values)

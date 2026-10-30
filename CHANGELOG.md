@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.12.0
+
+A heat demand deviation now has to be both real and meaningful before it is
+reported (the user: "Det skal altså bygges så det er brugbart og tager højde
+for alt ellers bliver det en funktion jeg aldrig tør regne med"). Backtested on
+30 days of a real house: 9 false "deviating" room-days before, 0 after.
+
+- **Practical significance.** The spread is never below 5 % of the room's
+  rated radiator power, at least 30 W (was 5 W). 20–60 W more in a room whose
+  radiator normally idles showed as +170–400 % and "deviating"; it is now
+  normal. A radiator suddenly running hundreds of watts more is still caught.
+- **Similar conditions, not only similar weather.** Days are compared only
+  when the share of time kept out for other heat (heat pump, stove) or an open
+  window/door is within 15 percentage points of the recent window's. A stove
+  keeps a room warm for hours after its excluded period, so a day without a
+  fire (e.g. during a holiday) looked like high demand against fire days. When
+  no learned day had such conditions the status is `learning` with the new
+  reason `unusual_conditions`.
+- **Confirmation.** "deviating" is only shown after it has held for 12 hours
+  (meanwhile `normal` with `deviation_confirming_since`), and clears after 3
+  hours back within the normal band. The pending state survives a restart.
+- New attributes in watts: `recent_average_w`, `expected_average_w`,
+  `difference_w`, `min_meaningful_difference_w`, plus
+  `recent_other_heat_share_percent`, `compared_other_heat_share_percent` and
+  `deviation_confirming_since`.
+- Includes 1.11.0 (setpoint changes are learning). (Change by Claude AI.)
+
 ## 1.11.0
 
 - A setpoint change is learning, not a deviation. Raising the setpoint made

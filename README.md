@@ -82,23 +82,38 @@ sensors:
 - **Heat demand status** with three states:
   - `learning` - not enough data yet (the `reason` attribute says why:
     fewer than seven valid days, an incomplete 48-hour window, weather too
-    mild for a meaningful ratio, or `setpoint_changed` while the room moves to
-    a new setpoint);
+    mild for a meaningful ratio, `setpoint_changed` while the room moves to
+    a new setpoint, or `unusual_conditions` when no learned day had weather
+    and other heat/openings like the recent window's);
   - `normal` - the recent value lies within the room's own normal spread;
   - `deviating` - it lies more than three robust standard deviations from the
-    room's normal, and stays so until it is back within two.
+    room's normal for at least 12 hours, and stays so until it has been back
+    within two for 3 hours. While a deviation waits for its 12 hours the status
+    stays `normal` and `deviation_confirming_since` says since when.
 
 The normal is learned per room from its own completed days (up to 28 days,
 each with at least 12 clean hours and a mean room/outdoor difference of at
 least 3 °C). Only days with weather like the recent window's are compared:
 their mean room/outdoor difference must be within 3 °C, and the closest ones
 are chosen, with wind as a tie-breaker when a wind speed sensor is configured.
+The share of time kept out for other heat (heat pump, stove) or an open
+window/door must also be within 15 percentage points of the recent window's:
+a stove keeps a room warm for hours after its excluded period, so a day
+without a fire needs more radiator heat than a day with one and is only
+compared with days like it.
 At least five such days are needed; otherwise the status stays `learning`
 with the reason `outside_learned_weather` rather than guessing. This matters
 because a room's W/°C naturally rises in colder weather, when free heat from
 people, appliances and sun covers less of the loss. The normal is the median
 of the compared days and the spread their median absolute deviation, never
-below 10 % of the normal or 5 W of average output. Samples taken while
+below 10 % of the normal or 5 % of the room's rated radiator power (at least
+30 W) of average output. So a few tens of watts more in a room whose radiator
+normally idles - which looked like +400 % - is never a deviation, while a
+radiator suddenly running at a large share of its power is. The attributes
+`recent_average_w`, `expected_average_w`, `difference_w` and
+`min_meaningful_difference_w` give the comparison in watts, and
+`recent_other_heat_share_percent` / `compared_other_heat_share_percent` the
+conditions it was compared under. Samples taken while
 external heat is active or a window/door is open - and for one hour
 afterwards - are left out.
 

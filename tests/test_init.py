@@ -431,3 +431,65 @@ async def test_replayed_heat_up_is_not_a_deviation(recorder_mock, hass: HomeAssi
     status = hass.states.get("sensor.kontor_heat_demand_status")
     assert status.state != "deviating"
     assert status.attributes["recent_excluded_hours"] >= 6.0
+
+
+async def test_a_lasting_real_deviation_is_confirmed_after_twelve_hours(
+    hass: HomeAssistant, hass_storage, freezer
+) -> None:
+    """Two weeks at a low valve, then the radiator runs flat out: a real change is caught,
+    but only shown once it has lasted twelve hours; the attributes say it in watts."""
+    from custom_components.room_energy_optimizer.model import estimated_power
+
+    now = dt_util.utcnow()
+    low = estimated_power(1000, 20, 45.0, 21.0, False)
+    lift, wind = 16.0, 5.0
+    day = [low * 24, lift * 24, 24.0, 0.0, wind * 24, 24.0]
+    hour = [low, lift, 1.0, 0.0, wind, 1.0]
+    today = dt_util.as_local(now).date()
+    first_hour = int(now.timestamp() // 3600) * 3600
+    hass_storage[f"{DOMAIN}.test"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": f"{DOMAIN}.test",
+        "data": {
+            "heat_demand_model_version": 3,
+            "month": dt_util.now().strftime("%Y-%m"),
+            "hours": {},
+            "demand": {
+                "kontor": {
+                    "status": "normal",
+                    "days": {
+                        (today - timedelta(days=n)).isoformat(): day for n in range(1, 15)
+                    },
+                    "hours": {str(first_hour - n * 3600): hour for n in range(1, 31)},
+                }
+            },
+        },
+    }
+    set_weather(hass)
+    set_climate(hass, 100)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Test", unique_id="main", entry_id="test", options=options()
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    confirming = None
+    for _ in range(12 * 30):
+        await tick(hass, freezer, 5)
+        status = hass.states.get("sensor.kontor_heat_demand_status")
+        if status.attributes["deviation_confirming_since"]:
+            confirming = status
+            break
+    assert confirming is not None and confirming.state == "normal"
+    assert confirming.attributes["difference_w"] > confirming.attributes[
+        "min_meaningful_difference_w"
+    ]
+    assert confirming.attributes["min_meaningful_difference_w"] == 50  # 5 % of 1000 W
+    await tick(hass, freezer, 11 * 60)
+    assert hass.states.get("sensor.kontor_heat_demand_status").state == "normal"
+    await tick(hass, freezer, 70)
+    status = hass.states.get("sensor.kontor_heat_demand_status")
+    assert status.state == "deviating"
+    assert status.attributes["deviation_confirming_since"] is None

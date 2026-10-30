@@ -45,6 +45,11 @@ from .const import (
     HEAT_DEMAND_SETPOINT_MIN_CHANGE_C,
     HEAT_DEMAND_SETPOINT_TAIL_HOURS,
     HEAT_DEMAND_SETPOINT_TOLERANCE_C,
+    HEAT_DEMAND_CONFIRM_DEVIATING_HOURS,
+    HEAT_DEMAND_CONFIRM_NORMAL_HOURS,
+    HEAT_DEMAND_MIN_SPREAD_RATED_FRACTION,
+    HEAT_DEMAND_SIMILAR_MAX_SHARE_DIFF,
+    HEAT_DEMAND_SIMILAR_SHARE_SCALE,
     HEAT_DEMAND_HISTORY_DAYS,
     HEAT_DEMAND_KEEP_DAYS,
     HEAT_DEMAND_MAX_SIMILAR_DAYS,
@@ -76,6 +81,7 @@ from .model import (
     StepSeries,
     cascade_flow_temperature,
     classify_demand,
+    confirm_status,
     contact_open,
     demand_sample,
     evaluate_external_heat,
@@ -115,6 +121,10 @@ class DemandView:
     z_score: float | None
     baseline_clean_hours: float
     setpoint_since: float | None = None
+    # Smallest deviation in average watts that can count (practical significance floor).
+    min_meaningful_w: float | None = None
+    # Since when a deviation is waiting to be confirmed, if it is.
+    confirming_since: float | None = None
 
 
 class RuntimeData:
@@ -278,7 +288,7 @@ class RuntimeData:
             HEAT_DEMAND_MIN_MEAN_LIFT,
         )
         learned = [
-            DemandDay(value, bucket.mean_lift, bucket.mean_wind)
+            DemandDay(value, bucket.mean_lift, bucket.mean_wind, bucket.excluded_share)
             for _, bucket in days
             if (
                 value := bucket.w_per_degree(
@@ -288,6 +298,9 @@ class RuntimeData:
             is not None
             and bucket.mean_lift is not None
         ]
+        min_meaningful_w = max(
+            HEAT_DEMAND_MIN_SPREAD_W, room.rated_power_w * HEAT_DEMAND_MIN_SPREAD_RATED_FRACTION
+        )
         baseline = learn_demand_baseline(
             learned,
             recent.mean_lift,
@@ -298,9 +311,12 @@ class RuntimeData:
             min_similar=HEAT_DEMAND_MIN_SIMILAR_DAYS,
             max_similar=HEAT_DEMAND_MAX_SIMILAR_DAYS,
             min_relative_spread=HEAT_DEMAND_MIN_RELATIVE_SPREAD,
-            min_spread_w=HEAT_DEMAND_MIN_SPREAD_W,
+            min_spread_w=min_meaningful_w,
+            excluded_share=recent.excluded_share,
+            max_share_diff=HEAT_DEMAND_SIMILAR_MAX_SHARE_DIFF,
+            share_scale=HEAT_DEMAND_SIMILAR_SHARE_SCALE,
         )
-        status, z_score = classify_demand(
+        raw, z_score = classify_demand(
             recent_value,
             baseline,
             model.status,
@@ -311,7 +327,16 @@ class RuntimeData:
         if transition.active:
             # Moving to a new setpoint is learning, not a deviation; afterwards the room is
             # judged afresh (entering "deviating" again needs the full z_enter).
-            status, z_score = "learning", None
+            status, z_score, model.pending = "learning", None, None
+        else:
+            status, model.pending = confirm_status(
+                raw,
+                model.status,
+                model.pending,
+                now_ts,
+                enter_seconds=HEAT_DEMAND_CONFIRM_DEVIATING_HOURS * 3600,
+                exit_seconds=HEAT_DEMAND_CONFIRM_NORMAL_HOURS * 3600,
+            )
         model.status = status
         reason = None
         if transition.active:
@@ -327,7 +352,11 @@ class RuntimeData:
                 else "recent_window_incomplete"
             )
         elif baseline.expected is None:
-            reason = "outside_learned_weather"
+            reason = (
+                "unusual_conditions"
+                if baseline.weather_compared >= HEAT_DEMAND_MIN_SIMILAR_DAYS
+                else "outside_learned_weather"
+            )
         return DemandView(
             status,
             reason,
@@ -337,6 +366,8 @@ class RuntimeData:
             z_score,
             sum(bucket.clean_hours for _, bucket in days),
             transition.since,
+            min_meaningful_w,
+            model.pending[1] if model.pending and model.pending[0] == "deviating" else None,
         )
 
     async def async_update(self, _now: datetime | None = None) -> None:

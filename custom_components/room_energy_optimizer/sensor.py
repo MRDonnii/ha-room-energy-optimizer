@@ -283,6 +283,17 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
         def rounded(value, digits=2):
             return None if value is None else round(value, digits)
 
+        def stamp(value):
+            return None if value is None else dt_util.utc_from_timestamp(value).isoformat()
+
+        # The same comparison in average watts: what the room used, what it normally uses in
+        # this weather and these conditions, and the smallest difference that can count.
+        lift = recent.mean_lift
+        expected_w = expected * lift if expected is not None and lift is not None else None
+        current_w = current * lift if current is not None and lift is not None else None
+        share = recent.excluded_share
+        share_range = baseline.share_range
+
         return {
             "method": "energy_signature",
             "reason": view.reason,
@@ -311,11 +322,18 @@ class HeatDemandStatusSensor(OptimizerEntity, SensorEntity):
             "baseline_ready": expected is not None,
             # The room is moving to a new setpoint; its samples are kept out until it is there.
             "setpoint_transition": view.setpoint_since is not None,
-            "setpoint_transition_since": (
-                None
-                if view.setpoint_since is None
-                else dt_util.utc_from_timestamp(view.setpoint_since).isoformat()
+            "setpoint_transition_since": stamp(view.setpoint_since),
+            "recent_average_w": rounded(current_w, 0),
+            "expected_average_w": rounded(expected_w, 0),
+            "difference_w": (
+                None if current_w is None or expected_w is None else round(current_w - expected_w)
             ),
+            "min_meaningful_difference_w": rounded(view.min_meaningful_w, 0),
+            "recent_other_heat_share_percent": None if share is None else round(100 * share),
+            "compared_other_heat_share_percent": (
+                None if share_range is None else [round(100 * v) for v in share_range]
+            ),
+            "deviation_confirming_since": stamp(view.confirming_since),
         }
 
 

@@ -2,7 +2,7 @@
 
 DOMAIN = "room_energy_optimizer"
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number"]
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 CONF_SYSTEM_TYPE = "system_type"
 CONF_FLOW_TEMPERATURE = "flow_temperature_entity"
@@ -70,6 +70,12 @@ HEAT_DEMAND_SETPOINT_TAIL_HOURS = 2.0
 # sun matters less when it is colder) from looking like a fault.
 HEAT_DEMAND_SIMILAR_MAX_LIFT_DIFF = 3.0
 HEAT_DEMAND_SIMILAR_WIND_SCALE_MS = 2.0
+# Only days where other heat (heat pump, stove) or open windows/doors kept out a similar share
+# of the time are compared. A stove keeps a room warm for hours after its excluded period, so
+# days with a fire need less radiator heat than days without; comparing a day without a fire
+# with fire days made a normal day look like high demand. 0.1 share weighs like 1 °C.
+HEAT_DEMAND_SIMILAR_MAX_SHARE_DIFF = 0.15
+HEAT_DEMAND_SIMILAR_SHARE_SCALE = 0.1
 HEAT_DEMAND_MIN_SIMILAR_DAYS = 5
 HEAT_DEMAND_MAX_SIMILAR_DAYS = 10
 # Status changes when the recent value leaves the room's own day-to-day spread
@@ -77,7 +83,17 @@ HEAT_DEMAND_MAX_SIMILAR_DAYS = 10
 HEAT_DEMAND_Z_ENTER = 3.0
 HEAT_DEMAND_Z_EXIT = 2.0
 HEAT_DEMAND_MIN_RELATIVE_SPREAD = 0.1
-# A radiator that normally idles may vary by this much average output.
-HEAT_DEMAND_MIN_SPREAD_W = 5.0
+# A radiator that normally idles may vary by this much average output (was 5 W, which let
+# 30–40 W of extra output in a room with a near-zero normal count as a deviation).
+HEAT_DEMAND_MIN_SPREAD_W = 30.0
 # On the first start of model v3 the recorder history is replayed once.
 HEAT_DEMAND_BACKFILL_DAYS = 10
+# Practical significance (Claude AI, 2026-10-30; the user: "Det skal altså bygges så det er
+# brugbart og tager højde for alt"): a radiator that normally idles can easily vary by tens of
+# watts, which is nothing, but against a normal near zero it looked like +400 %. The spread is
+# never below this share of the room's rated radiator power (nor HEAT_DEMAND_MIN_SPREAD_W).
+HEAT_DEMAND_MIN_SPREAD_RATED_FRACTION = 0.05
+# A deviation must last this long before the status says "deviating" (and be back within the
+# exit band this long before it clears), so a single odd day or evening never raises it.
+HEAT_DEMAND_CONFIRM_DEVIATING_HOURS = 12.0
+HEAT_DEMAND_CONFIRM_NORMAL_HOURS = 3.0
