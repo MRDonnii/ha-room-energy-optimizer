@@ -1,0 +1,129 @@
+# Shared CI for Home Assistant custom integrations (hassfest, HACS, pytest).
+# Call it from another repo:
+#   jobs:
+#     ci:
+#       uses: MRDonnii/ha-room-energy-optimizer/.github/workflows/ha-integration-ci.yml@main
+name: HA integration CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version for the pytest job
+        type: string
+        default: "3.13"
+      hacs:
+        description: Run the HACS validation (needs a public repository)
+        type: boolean
+        default: true
+      hacs-ignore:
+        description: Space-separated HACS checks to ignore (license - PolyForm Noncommercial is not an SPDX license GitHub detects, so HACS cannot validate it)
+        type: string
+        default: brands license
+      hassfest:
+        description: Run hassfest
+        type: boolean
+        default: true
+      pytest:
+        description: Run pytest when the repository has tests
+        type: boolean
+        default: true
+      phacc-version:
+        description: Version spec for pytest-homeassistant-custom-component when no requirements file exists (e.g. "==0.13.205")
+        type: string
+        default: ""
+      extra-packages:
+        description: Extra pip packages for the test job
+        type: string
+        default: ""
+      pytest-args:
+        description: Arguments passed to pytest
+        type: string
+        default: "-q -p no:cacheprovider"
+      test-command:
+        description: Run this command instead of pytest (for suites written for "python -m unittest" or as plain scripts)
+        type: string
+        default: ""
+      ruff:
+        description: Run "ruff check ." before pytest
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    if: inputs.hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    if: inputs.hacs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hacs/action@main
+        with:
+          category: integration
+          ignore: ${{ inputs.hacs-ignore }}
+
+  pytest:
+    if: inputs.pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Look for tests
+        id: detect
+        run: |
+          if find . -path ./.git -prune -o -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No tests found - skipping pytest."
+          fi
+
+      - uses: actions/setup-python@v6
+        if: steps.detect.outputs.found == 'true'
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install test dependencies
+        if: steps.detect.outputs.found == 'true'
+        env:
+          PHACC_VERSION: ${{ inputs.phacc-version }}
+          EXTRA_PACKAGES: ${{ inputs.extra-packages }}
+          RUFF: ${{ inputs.ruff }}
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          shopt -s nullglob
+          reqs=(requirements_test*.txt requirements-test*.txt requirements_dev*.txt requirements-dev*.txt)
+          [ ${#reqs[@]} -eq 0 ] && reqs=(requirements*.txt)
+          if [ ${#reqs[@]} -gt 0 ]; then
+            for f in "${reqs[@]}"; do echo "pip install -r $f"; pip install -r "$f"; done
+          else
+            pip install "pytest-homeassistant-custom-component${PHACC_VERSION}"
+          fi
+          manifest_reqs=$(jq -r '.requirements[]?' custom_components/*/manifest.json 2>/dev/null | sort -u)
+          [ -n "$manifest_reqs" ] && pip install $manifest_reqs
+          [ -n "$EXTRA_PACKAGES" ] && pip install $EXTRA_PACKAGES
+          [ "$RUFF" = "true" ] && pip install ruff
+          pip list 2>/dev/null | grep -iE '^(homeassistant|pytest-homeassistant-custom-component|pytest) ' || true
+
+      - name: Ruff
+        if: steps.detect.outputs.found == 'true' && inputs.ruff
+        run: ruff check .
+
+      - name: Pytest
+        if: steps.detect.outputs.found == 'true' && inputs.test-command == ''
+        run: python -m pytest ${{ inputs.pytest-args }}
+
+      - name: Tests (custom command)
+        if: steps.detect.outputs.found == 'true' && inputs.test-command != ''
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: bash -c "$TEST_COMMAND"
