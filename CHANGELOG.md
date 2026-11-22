@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.3
+
+- Maintenance: update test after the repository move. No functional changes.
+
 ## 1.12.2
 
 - Cleanup: personal examples removed. No functional changes.
