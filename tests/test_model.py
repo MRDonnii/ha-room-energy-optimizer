@@ -1,0 +1,216 @@
+"""Tests for calculations that do not need Home Assistant."""
+
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
+PATH = Path(__file__).parents[1] / "custom_components/room_energy_optimizer/model.py"
+SPEC = spec_from_file_location("room_energy_optimizer_model", PATH)
+model = module_from_spec(SPEC)
+assert SPEC.loader is not None
+sys.modules[SPEC.name] = model
+SPEC.loader.exec_module(model)
+
+
+def test_parse_rooms_and_danish_slug():
+    rooms = model.parse_rooms("Køkken|climate.kitchen|1129|18,5")
+    assert rooms[0].slug == "koekken"
+    assert rooms[0].rated_power_w == 1129
+    assert rooms[0].area_m2 == 18.5
+
+
+def test_parse_rooms_accepts_migration_seed():
+    rooms = model.parse_rooms("Living room|climate.living_room|2000|30|12,45")
+    assert rooms[0].initial_valve_hours == 12.45
+
+
+def test_parse_rooms_rejects_bad_entity():
+    try:
+        model.parse_rooms("Kitchen|sensor.temperature|1000|20")
+    except ValueError as err:
+        assert "climate." in str(err)
+    else:
+        raise AssertionError("invalid room accepted")
+
+
+def test_valve_percentage_averages_and_clamps():
+    attributes = {
+        "calibration_balance": {
+            "climate.one": {"valve%": 20},
+            "climate.two": {"valve%": 140},
+        }
+    }
+    assert model.valve_percentage(attributes) == 60
+
+
+def test_valve_percentage_missing_is_not_zero():
+    assert model.valve_percentage({}) is None
+
+
+def test_valve_percentage_accepts_json_attribute():
+    attributes = {
+        "calibration_balance": ('{"climate.one":{"valve%":20},"climate.two":{"valve%":60}}')
+    }
+    assert model.valve_percentage(attributes) == 40
+
+
+def test_one_pipe_reference_power():
+    value = model.estimated_power(1000, 50, 70, 20, True)
+    assert value is not None
+    assert round(value) == 500
+
+
+def test_no_temperature_lift_means_no_power():
+    assert model.estimated_power(1000, 100, 20, 21, True) == 0
+
+
+def test_room_from_dict_wizard_submission():
+    room = model.room_from_dict(
+        {
+            "name": "Køkken",
+            "climate_entity": "climate.kitchen",
+            "rated_power_w": 1129,
+            "area_m2": "18,5",
+            "radiator_count": 2,
+        },
+        existing_slugs=set(),
+    )
+    assert room.slug == "koekken"
+    assert room.radiator_count == 2
+    assert room.initial_valve_hours == 0.0
+
+
+def test_room_from_dict_normalises_inherit_system_type():
+    room = model.room_from_dict(
+        {
+            "name": "Stue",
+            "climate_entity": "climate.stue",
+            "rated_power_w": 1000,
+            "area_m2": 20,
+            "system_type_override": "inherit",
+        },
+        existing_slugs=set(),
+    )
+    assert room.system_type_override == ""
+
+
+def test_room_from_dict_rejects_duplicate_slug():
+    try:
+        model.room_from_dict(
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 1000,
+                "area_m2": 20,
+            },
+            existing_slugs={"stue"},
+        )
+    except ValueError as err:
+        assert "duplicate" in str(err)
+    else:
+        raise AssertionError("duplicate room name accepted")
+
+
+def test_room_to_dict_round_trips_through_room_from_dict():
+    original = model.RoomConfig("Stue", "stue", "climate.stue", 5193.0, 44.0, 3, 1.5)
+    data = model.room_to_dict(original)
+    rebuilt = model.room_from_dict(data, existing_slugs=set())
+    assert rebuilt == original
+
+
+def test_rooms_from_options_accepts_legacy_string():
+    rooms = model.rooms_from_options("Stue|climate.stue|5193|44")
+    assert rooms[0].name == "Stue"
+    assert rooms[0].radiator_count == 1
+
+
+def test_rooms_from_options_accepts_wizard_list():
+    rooms = model.rooms_from_options(
+        [
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 5193,
+                "area_m2": 44,
+                "radiator_count": 3,
+            }
+        ]
+    )
+    assert rooms[0].radiator_count == 3
+
+
+def test_rooms_from_options_rejects_empty_list():
+    try:
+        model.rooms_from_options([])
+    except ValueError as err:
+        assert "at least one room" in str(err)
+    else:
+        raise AssertionError("empty room list accepted")
+
+
+def test_room_external_heat_configuration_round_trip():
+    room = model.room_from_dict(
+        {
+            "name": "Stue",
+            "climate_entity": "climate.stue",
+            "rated_power_w": 5193,
+            "area_m2": 44,
+            "radiator_count": 2,
+            "better_thermostat_extension_enabled": True,
+            "external_heat_entities": ["climate.heat_pump", "binary_sensor.fireplace"],
+            "stove_temperature_entity": "sensor.stove_temperature",
+            "stove_on_temperature": 25,
+            "stove_off_temperature": 24,
+        },
+        existing_slugs=set(),
+    )
+    restored = model.rooms_from_options([model.room_to_dict(room)])[0]
+    assert restored == room
+
+
+def test_better_thermostat_extension_is_optional_and_defaults_off():
+    room = model.rooms_from_options(
+        [
+            {
+                "name": "Office",
+                "climate_entity": "climate.office",
+                "rated_power_w": 1000,
+                "area_m2": 12,
+            }
+        ]
+    )[0]
+    assert room.better_thermostat_extension_enabled is False
+
+
+def test_legacy_external_heat_configuration_enables_extension():
+    room = model.rooms_from_options(
+        [
+            {
+                "name": "Living room",
+                "climate_entity": "climate.living_room",
+                "rated_power_w": 2000,
+                "area_m2": 30,
+                "external_heat_entities": ["climate.heat_pump"],
+            }
+        ]
+    )[0]
+    assert room.better_thermostat_extension_enabled is True
+
+
+def test_room_rejects_invalid_stove_hysteresis():
+    try:
+        model.room_from_dict(
+            {
+                "name": "Stue",
+                "climate_entity": "climate.stue",
+                "rated_power_w": 5193,
+                "area_m2": 44,
+                "stove_on_temperature": 24,
+                "stove_off_temperature": 25,
+            },
+            existing_slugs=set(),
+        )
+    except ValueError as err:
+        assert "below" in str(err)
+    else:
+        raise AssertionError("invalid stove hysteresis was accepted")

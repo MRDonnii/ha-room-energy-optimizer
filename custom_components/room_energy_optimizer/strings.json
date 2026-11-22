@@ -1,0 +1,205 @@
+{
+  "title": "Room Energy Optimizer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure room heating",
+        "description": "Creates read-only energy estimates. It never controls thermostats and does not modify Better Thermostat. Rooms are added one at a time on the next screen.",
+        "data": {
+          "name": "Name",
+          "system_type": "Heating system",
+          "flow_temperature_entity": "Flow temperature sensor",
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
+          "wind_speed_entity": "Wind speed sensor (optional)",
+          "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
+          "loop_order": "One-pipe loop order (optional)",
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_language": "Notification language"
+        },
+        "data_description": {
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
+          "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
+          "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop.",
+          "alert_notify_entity": "Choose a notify entity. Alerts remain off until you turn on the integration's Radiator stress notifications switch."
+        }
+      },
+      "add_room": {
+        "title": "Room {room_number}",
+        "description": "Rooms so far: {rooms_so_far}",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
+          "external_heat_entities": "Heat pumps or external-heat binary sensors",
+          "stove_temperature_entity": "Stove temperature sensor (optional)",
+          "stove_on_temperature": "Stove active above",
+          "stove_off_temperature": "Stove inactive below",
+          "add_another_room": "Add another room"
+        },
+        "data_description": {
+          "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup.",
+          "better_thermostat_extension_enabled": "Adds external-heat guards and opening-contact data. When disabled, the integration does not affect Better Thermostat learning.",
+          "external_heat_entities": "Climate entities count only while hvac_action is heating. Binary sensors count while on.",
+          "stove_temperature_entity": "Uses hysteresis so normal sensor noise does not repeatedly pause and resume learning."
+        }
+      }
+    },
+    "error": {
+      "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
+      "invalid_sensor": "The optional sensor entity must start with sensor.",
+      "invalid_notify": "Choose a notify entity."
+    },
+    "abort": {
+      "already_configured": "Room Energy Optimizer is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit settings",
+        "description": "Changes reload the integration. Rooms are managed on the next screen.",
+        "data": {
+          "name": "Name",
+          "system_type": "Heating system",
+          "flow_temperature_entity": "Flow temperature sensor",
+          "outdoor_temperature_entity": "Outdoor temperature sensor (optional)",
+          "wind_speed_entity": "Wind speed sensor (optional)",
+          "monthly_cost_entity": "Monthly heating cost sensor (optional)",
+          "monthly_cost_baseline_entity": "Monthly cost baseline entity (optional)",
+          "loop_order": "One-pipe loop order (optional)",
+          "loop_drop_per_station_c": "Assumed drop per loop stop (experimental)",
+          "alert_notify_entity": "Radiator alert recipient (optional)",
+          "alert_language": "Notification language"
+        },
+        "data_description": {
+          "outdoor_temperature_entity": "Enables the weather-normalised heat demand status per room: the last 48 hours of estimated radiator energy per degree of room/outdoor difference, compared with the room's own days.",
+          "wind_speed_entity": "Lets the heat demand status learn how much wind raises each room's heat demand. Used only when a room's history shows a clear wind effect.",
+          "loop_order": "One stop per line, in physical flow order: a label on its own, or `label|room_slug` to link a stop to a configured room (its slug is the room name, lowercased with spaces as underscores). A room with more than one radiator on the loop gets one line per radiator, same slug. Feeds the diagnostic \"experimental cascade\" sensors only - a room's own Heating system field above is what actually changes its main estimate.",
+          "loop_drop_per_station_c": "Unvalidated assumption used only by the diagnostic \"experimental cascade\" sensors - nothing in this integration measures the real per-radiator drop.",
+          "alert_notify_entity": "Choose a notify entity. Alerts remain off until you turn on the integration's Radiator stress notifications switch."
+        }
+      },
+      "manage_rooms": {
+        "title": "Manage rooms",
+        "description": "Configured rooms: {rooms_so_far}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_room": {
+        "title": "Room {room_number}",
+        "description": "Rooms so far: {rooms_so_far}",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month (migration only)",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
+          "system_type_override": "Heating system override (optional)",
+          "external_heat_entities": "Heat pumps or external-heat binary sensors",
+          "stove_temperature_entity": "Stove temperature sensor (optional)",
+          "stove_on_temperature": "Stove active above",
+          "stove_off_temperature": "Stove inactive below",
+          "add_another_room": "Add another room"
+        },
+        "data_description": {
+          "initial_valve_hours": "Leave at 0 unless migrating mid-month from an older setup.",
+          "better_thermostat_extension_enabled": "Adds external-heat guards and opening-contact data. When disabled, the integration does not affect Better Thermostat learning.",
+          "system_type_override": "Use this when the room is on its own dedicated branch that differs from the house-wide heating system (e.g. a two-pipe garage or kitchen loop off an otherwise one-pipe house). Leave on the default to inherit the house-wide setting.",
+          "external_heat_entities": "Climate entities count only while hvac_action is heating. Binary sensors count while on.",
+          "stove_temperature_entity": "Uses hysteresis so normal sensor noise does not repeatedly pause and resume learning."
+        }
+      },
+      "remove_room": {
+        "title": "Remove a room",
+        "data": {
+          "room": "Room to remove"
+        }
+      },
+      "select_room_to_edit": {
+        "title": "Edit a room",
+        "data": {
+          "room": "Room to edit"
+        }
+      },
+      "edit_room": {
+        "title": "Edit room",
+        "data": {
+          "name": "Room name",
+          "climate_entity": "Climate entity",
+          "rated_power_w": "Rated radiator output",
+          "area_m2": "Room area",
+          "radiator_count": "Number of radiators",
+          "initial_valve_hours": "Existing valve-hours this month",
+          "better_thermostat_extension_enabled": "Enable optional Better Thermostat extension",
+          "system_type_override": "Heating system override (optional)",
+          "external_heat_entities": "Heat pumps or external-heat binary sensors",
+          "stove_temperature_entity": "Stove temperature sensor (optional)",
+          "stove_on_temperature": "Stove active above",
+          "stove_off_temperature": "Stove inactive below"
+        }
+      }
+    },
+    "error": {
+      "invalid_room": "Enter a unique room name, a climate entity, and positive numbers for power, area and radiator count.",
+      "invalid_sensor": "The optional sensor entity must start with sensor.",
+      "invalid_notify": "Choose a notify entity."
+    }
+  },
+  "selector": {
+    "alert_language": {
+      "options": {
+        "auto": "Follow Home Assistant",
+        "da": "Danish",
+        "en": "English"
+      }
+    },
+    "system_type": {
+      "options": {
+        "one_pipe": "One-pipe system",
+        "two_pipe": "Two-pipe system"
+      }
+    },
+    "system_type_override": {
+      "options": {
+        "inherit": "Same as house-wide setting",
+        "one_pipe": "One-pipe system",
+        "two_pipe": "Two-pipe system"
+      }
+    },
+    "manage_rooms_action": {
+      "options": {
+        "add": "Add a room",
+        "edit": "Edit a room",
+        "remove": "Remove a room",
+        "done": "Done - save changes"
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "radiator_alert_observation_time": {"name": "Radiator alert observation time"}
+    },
+    "switch": {
+      "radiator_stress_notifications": {"name": "Radiator stress notifications"}
+    },
+    "sensor": {
+      "heat_demand_status": {
+        "state": {
+          "learning": "Learning baseline",
+          "normal": "Normal",
+          "deviating": "Outside normal range"
+        }
+      }
+    }
+  }
+}
