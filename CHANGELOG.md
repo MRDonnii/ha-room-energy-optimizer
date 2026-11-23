@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.12.4
+
+- **Uses Better Thermostat's own learning pause.** Better Thermostat 2.0 can
+  pause its learning itself (the room's "Pause learning" switch), and that
+  pause also stops MPC v2 from learning. When a room's Better Thermostat has
+  it, the learning guard now only switches that built-in pause on and off from
+  the room's "External heat active" sensor, instead of patching Better
+  Thermostat's learning methods. Older Better Thermostat versions keep the
+  previous behaviour. The `thermal_learning_paused` attribute and the Data
+  problem check work as before, so the separate `bt_learning_guard`
+  integration is no longer needed.
+
 ## 1.12.3
 
 - Maintenance: update test after the repository move. No functional changes.

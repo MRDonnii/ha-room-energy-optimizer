@@ -19,6 +19,13 @@ in 2.x, plus ``start_ts``/``end_ts``) and the ``extra_state_attributes``
 property. If an update changes them, the guard does not attach and logs a
 warning; the climate then lacks ``thermal_learning_paused`` and the Data
 problem sensor reports it.
+
+Better Thermostat 2.0 has its own learning pause (``set_learning_paused`` and
+``learning_paused``, shown as the room's "Pause learning" switch). It also stops
+MPC v2 from learning. When a room's Better Thermostat has it, the guard only
+drives that built-in pause from the "External heat active" sensor and leaves
+Better Thermostat's methods alone; the tracker patching above is the fallback
+for older versions.
 """
 
 from __future__ import annotations
@@ -76,6 +83,14 @@ class _Attachment:
     guard: _Guard
     unsub: CALLBACK_TYPE | None = None
     methods: list[str] = field(default_factory=list)
+    native: bool = False
+
+
+def native(entity: Any) -> bool:
+    """Return True when Better Thermostat has its own learning pause (2.0+)."""
+    return callable(getattr(entity, "set_learning_paused", None)) and hasattr(
+        entity, "learning_paused"
+    )
 
 
 def _tracker_fields(tracker: Any) -> tuple[str, ...] | None:
@@ -189,6 +204,24 @@ class LearningGuard:
                 entity_id,
             )
             return
+        if native(entity):
+            # Better Thermostat's own pause: no method patching needed.
+            self._reported.discard(f"incompatible:{entity_id}")
+            cls = type(entity)
+            _wrap_attributes(cls)
+            self._classes.append(cls)
+            initial = self.hass.states.get(guard_id)
+            guard = _Guard(guard_id, paused=initial is None or initial.state != STATE_OFF)
+            attachment = _Attachment(entity, guard, native=True)
+            setattr(entity, _ENTITY_ATTR, guard)
+            entity.set_learning_paused(guard.paused)
+            attachment.unsub = async_track_state_change_event(
+                self.hass, [guard_id], functools.partial(self._async_guard_changed, entity_id)
+            )
+            self._attached[entity_id] = attachment
+            _LOGGER.debug("Guarding %s with %s (Better Thermostat's own pause)", entity_id, guard_id)
+            self._write_state(entity)
+            return
         if not compatible(entity):
             self._report_once(
                 f"incompatible:{entity_id}",
@@ -239,9 +272,13 @@ class LearningGuard:
     def _apply(self, attachment: _Attachment, state: State | None) -> None:
         paused = state is None or state.state != STATE_OFF
         guard = attachment.guard
-        if paused != guard.paused:
+        if attachment.native:
+            if paused != guard.paused or bool(attachment.entity.learning_paused) != paused:
+                attachment.entity.set_learning_paused(paused)
+        elif paused != guard.paused:
             for tracker_name in _LEARNING_METHODS.values():
                 _discard(getattr(attachment.entity, tracker_name))
+        if paused != guard.paused:
             _LOGGER.info(
                 "%s: thermal learning %s (%s=%s)",
                 attachment.entity.entity_id,
@@ -271,6 +308,8 @@ class LearningGuard:
         if attachment.unsub is not None:
             attachment.unsub()
         entity = attachment.entity
+        if attachment.native and attachment.guard.paused and entity.learning_paused:
+            entity.set_learning_paused(False)
         for method in attachment.methods:
             entity.__dict__.pop(method, None)
         entity.__dict__.pop(_ENTITY_ATTR, None)

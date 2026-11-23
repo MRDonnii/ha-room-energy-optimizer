@@ -161,3 +161,56 @@ async def test_incompatible_better_thermostat_is_reported(hass: HomeAssistant, c
     guard.async_scan()
     assert ATTR_PAUSED not in hass.states.get("climate.stue").attributes
     assert "Cannot guard climate.stue" in caplog.text
+
+
+class FakeNativeBT(FakeBT2):
+    """Better Thermostat 2.0 with its own learning pause."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.learning_paused = False
+        self.calls: list[bool] = []
+
+    def set_learning_paused(self, paused: bool) -> None:
+        self.calls.append(paused)
+        if paused == self.learning_paused:
+            return
+        self.learning_paused = paused
+        if self.hass is not None:
+            self.async_write_ha_state()
+
+
+async def test_native_pause_is_driven_without_patching(hass: HomeAssistant) -> None:
+    hass.states.async_set(GUARD, "on")
+    stue = FakeNativeBT("Stue")
+    await _add_bt_platform(hass, [stue])
+    guard = LearningGuard(hass, lambda: {"climate.stue": GUARD})
+    guard.async_scan()
+    await hass.async_block_till_done()
+
+    assert stue.learning_paused is True
+    assert "calculate_heating_power" not in stue.__dict__  # nothing patched
+    state = hass.states.get("climate.stue")
+    assert state.attributes[ATTR_PAUSED] is True
+    assert state.attributes[ATTR_GUARD] == GUARD
+
+    hass.states.async_set(GUARD, "off")
+    await hass.async_block_till_done()
+    assert stue.learning_paused is False
+    assert hass.states.get("climate.stue").attributes[ATTR_PAUSED] is False
+
+    # Someone pauses it by hand while external heat is off: the next guard change re-applies.
+    stue.set_learning_paused(True)
+    hass.states.async_set(GUARD, "off", {"x": 1})
+    await hass.async_block_till_done()
+    assert stue.learning_paused is False
+
+    hass.states.async_set(GUARD, "unavailable")
+    await hass.async_block_till_done()
+    assert stue.learning_paused is True
+
+    guard.async_stop()
+    await hass.async_block_till_done()
+    assert stue.learning_paused is False  # the pause the guard set is released
+    stue.async_write_ha_state()
+    assert ATTR_PAUSED not in hass.states.get("climate.stue").attributes
