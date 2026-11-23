@@ -219,7 +219,9 @@ class LearningGuard:
                 self.hass, [guard_id], functools.partial(self._async_guard_changed, entity_id)
             )
             self._attached[entity_id] = attachment
-            _LOGGER.debug("Guarding %s with %s (Better Thermostat's own pause)", entity_id, guard_id)
+            _LOGGER.debug(
+                "Guarding %s with %s (Better Thermostat's own pause)", entity_id, guard_id
+            )
             self._write_state(entity)
             return
         if not compatible(entity):
